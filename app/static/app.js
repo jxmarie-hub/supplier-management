@@ -23,8 +23,6 @@ function initConditionalFields() {
     const isFinish = nature.value === "Finish product";
     const isOem = nature.value === "OEM";
     if (isFinish) {
-      method.value = "N/A";
-    } else if (isOem && method.value === "N/A") {
       method.value = "";
     }
     if (hintItem) hintItem.hidden = !isFinish;
@@ -185,7 +183,7 @@ function initSupplierFormValidation() {
       if (ig) ig.focus();
       return;
     }
-    if (nature === "OEM" && (!String(method).trim() || method === "N/A")) {
+    if (nature === "OEM" && !String(method).trim()) {
       e.preventDefault();
       alert("Production Method is required when Nature of Product is OEM.");
       const m = form.querySelector("#field-method");

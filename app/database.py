@@ -145,9 +145,7 @@ def init_db() -> None:
         conn.executescript(SCHEMA_SQL)
         _migrate_schema(conn)
         _seed_if_empty(conn)
-        _sync_asia_countries(conn)
-
-
+        _sync_lookups_from_seed(conn)
 
 
 def _migrate_schema(conn: sqlite3.Connection) -> None:
@@ -157,44 +155,92 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE suppliers ADD COLUMN interest_level TEXT")
 
 
-def _sync_asia_countries(conn: sqlite3.Connection) -> None:
-    """Keep country lookup list aligned with Asia-only seed_lookups.json."""
+def _load_seed_data() -> dict:
     path = config.SEED_LOOKUPS_PATH
     with open(path, encoding="utf-8") as f:
-        data = json.load(f)
-    allowed = {_clean_lookup_value(v) for v in data.get("countries", []) if str(v).strip()}
-    if not allowed:
-        return
-    rows = conn.execute(
-        "SELECT id, value FROM lookup_values WHERE lookup_type = 'country'"
-    ).fetchall()
-    for row in rows:
-        if (row["value"] or "").strip() not in allowed:
-            conn.execute("DELETE FROM lookup_values WHERE id = ?", (row["id"],))
-    existing = {
-        (r["value"] or "").strip()
-        for r in conn.execute(
-            "SELECT value FROM lookup_values WHERE lookup_type = 'country'"
-        ).fetchall()
-    }
-    order = 0
-    for raw in data.get("countries", []):
+        return json.load(f)
+
+
+def get_grouping_options() -> list[str]:
+    """Fixed Grouping dropdown from Jean's seed list (tag_1)."""
+    data = _load_seed_data()
+    out: list[str] = []
+    seen: set[str] = set()
+    for raw in data.get("groupings", []):
         value = _clean_lookup_value(raw)
         if not value:
             continue
-        if value not in existing:
-            conn.execute(
-                "INSERT OR IGNORE INTO lookup_values (lookup_type, value, sort_order, is_active) VALUES (?, ?, ?, 1)",
-                ("country", value, order),
-            )
-        order += 1
+        key = value.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(value)
+    return out
+
+
+def _sync_lookups_from_seed(conn: sqlite3.Connection) -> None:
+    """Replace lookup_values so live DB matches seed_lookups.json exactly."""
+    data = _load_seed_data()
+    mapping = {
+        "country": data.get("countries", []),
+        "cn_province": data.get("cn_provinces", []),
+        "item_group_name": data.get("item_groups", []),
+        "production_method": data.get("production_methods", []),
+        "nature_of_product": data.get("natures", []),
+        "meet": data.get("meets", []),
+    }
+    for lookup_type, values in mapping.items():
+        wanted: list[str] = []
+        seen: set[str] = set()
+        for raw in values:
+            value = _clean_lookup_value(raw)
+            if not value:
+                continue
+            key = value.casefold()
+            if key in seen:
+                continue
+            seen.add(key)
+            wanted.append(value)
+        allowed = set(wanted)
+        rows = conn.execute(
+            "SELECT id, value FROM lookup_values WHERE lookup_type = ?",
+            (lookup_type,),
+        ).fetchall()
+        for row in rows:
+            if (row["value"] or "").strip() not in allowed:
+                conn.execute("DELETE FROM lookup_values WHERE id = ?", (row["id"],))
+        existing = {
+            (r["value"] or "").strip(): r
+            for r in conn.execute(
+                "SELECT id, value, sort_order FROM lookup_values WHERE lookup_type = ?",
+                (lookup_type,),
+            ).fetchall()
+        }
+        for order, value in enumerate(wanted):
+            if value in existing:
+                if existing[value]["sort_order"] != order:
+                    conn.execute(
+                        "UPDATE lookup_values SET sort_order = ?, is_active = 1 WHERE id = ?",
+                        (order, existing[value]["id"]),
+                    )
+            else:
+                conn.execute(
+                    "INSERT OR IGNORE INTO lookup_values (lookup_type, value, sort_order, is_active) VALUES (?, ?, ?, 1)",
+                    (lookup_type, value, order),
+                )
 
 
 def _seed_if_empty(conn: sqlite3.Connection) -> None:
     user_count = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
     lookup_count = conn.execute("SELECT COUNT(*) FROM lookup_values").fetchone()[0]
     supplier_count = conn.execute("SELECT COUNT(*) FROM suppliers").fetchone()[0]
-    demo_target = 28
+    demo_target = 50
+    data = _load_seed_data()
+    countries = {_clean_lookup_value(v) for v in data.get("countries", []) if str(v).strip()}
+    groupings = {_clean_lookup_value(v) for v in data.get("groupings", []) if str(v).strip()}
+    meets = {_clean_lookup_value(v) for v in data.get("meets", []) if str(v).strip()}
+    item_groups = {_clean_lookup_value(v) for v in data.get("item_groups", []) if str(v).strip()}
+    methods = {_clean_lookup_value(v) for v in data.get("production_methods", []) if str(v).strip()}
 
     if lookup_count == 0:
         _seed_lookups(conn)
@@ -210,30 +256,44 @@ def _seed_if_empty(conn: sqlite3.Connection) -> None:
             ("Utilisateur1", hash_password("EssayeCa"), "standard", now),
         )
         _seed_sample_suppliers(conn)
-    else:
-        asia = set()
-        path = config.SEED_LOOKUPS_PATH
-        with open(path, encoding="utf-8") as f:
-            asia = {_clean_lookup_value(v) for v in json.load(f).get("countries", []) if str(v).strip()}
-        bad = conn.execute(
-            "SELECT COUNT(*) FROM suppliers WHERE country IS NOT NULL AND TRIM(country) != '' AND country NOT IN (%s)"
-            % (",".join("?" * len(asia)) if asia else "NULL"),
-            tuple(asia) if asia else (),
-        ).fetchone()[0] if asia else 0
-        interest_filled = conn.execute(
-            "SELECT COUNT(*) FROM suppliers WHERE interest_level IS NOT NULL AND TRIM(interest_level) != ''"
+        return
+
+    def _bad_count(column: str, allowed: set[str]) -> int:
+        if not allowed:
+            return 0
+        placeholders = ",".join("?" * len(allowed))
+        return conn.execute(
+            f"""
+            SELECT COUNT(*) FROM suppliers
+            WHERE {column} IS NOT NULL AND TRIM({column}) != ''
+              AND {column} NOT IN ({placeholders})
+            """,
+            tuple(allowed),
         ).fetchone()[0]
-        missing_interest = supplier_count > 0 and interest_filled == 0
-        missing_grouping = conn.execute(
-            "SELECT COUNT(*) FROM suppliers WHERE tag_1 IS NULL OR TRIM(tag_1) = ''"
-        ).fetchone()[0]
-        if supplier_count < demo_target or bad or missing_interest or missing_grouping:
-            # Demo refresh: replace suppliers when seed grew, non-Asia rows remain,
-            # interest unset, or Grouping (tag_1) missing under new rules.
-            conn.execute("DELETE FROM attachments")
-            conn.execute("DELETE FROM suppliers")
-            conn.execute("DELETE FROM known_tags")
-            _seed_sample_suppliers(conn)
+
+    bad = (
+        _bad_count("country", countries)
+        + _bad_count("tag_1", groupings)
+        + _bad_count("meet", meets)
+        + _bad_count("item_group_name", item_groups)
+        + _bad_count("production_method", methods)
+    )
+    # Legacy N/A production method is no longer in Jean's list
+    bad += conn.execute(
+        "SELECT COUNT(*) FROM suppliers WHERE production_method = 'N/A'"
+    ).fetchone()[0]
+    interest_filled = conn.execute(
+        "SELECT COUNT(*) FROM suppliers WHERE interest_level IS NOT NULL AND TRIM(interest_level) != ''"
+    ).fetchone()[0]
+    missing_interest = supplier_count > 0 and interest_filled == 0
+    missing_grouping = conn.execute(
+        "SELECT COUNT(*) FROM suppliers WHERE tag_1 IS NULL OR TRIM(tag_1) = ''"
+    ).fetchone()[0]
+    if supplier_count < demo_target or bad or missing_interest or missing_grouping:
+        conn.execute("DELETE FROM attachments")
+        conn.execute("DELETE FROM suppliers")
+        conn.execute("DELETE FROM known_tags")
+        _seed_sample_suppliers(conn)
 
 
 def _clean_lookup_value(value: str) -> str:
@@ -241,10 +301,7 @@ def _clean_lookup_value(value: str) -> str:
 
 
 def _seed_lookups(conn: sqlite3.Connection) -> None:
-    path = config.SEED_LOOKUPS_PATH
-    with open(path, encoding="utf-8") as f:
-        data = json.load(f)
-
+    data = _load_seed_data()
     mapping = {
         "country": data["countries"],
         "cn_province": data["cn_provinces"],
@@ -253,9 +310,6 @@ def _seed_lookups(conn: sqlite3.Connection) -> None:
         "nature_of_product": data["natures"],
         "meet": data["meets"],
     }
-    if "N/A" not in mapping["production_method"]:
-        mapping["production_method"].append("N/A")
-
     for lookup_type, values in mapping.items():
         seen: set[str] = set()
         order = 0
@@ -275,611 +329,127 @@ def _seed_lookups(conn: sqlite3.Connection) -> None:
 
 
 def _seed_sample_suppliers(conn: sqlite3.Connection) -> None:
+    """Demo set (~50) covering Jean's lookup combinations."""
     now = utc_now()
     admin = conn.execute("SELECT id FROM users WHERE username = 'admin'").fetchone()
     admin_id = admin["id"] if admin else None
-    samples = [
-        {
-            "status": "Current",
-            "meet": "Canton Fair Oct 2026",
-            "country": "China",
-            "cn_province": "GUANGDONG PROVINCE",
-            "city": "Foshan",
-            "factory_trading_name": "Guangdong LED Lighting Co.",
-            "website": "https://example-led.cn",
-            "contact_name": "Zhang Wei",
-            "email": "sales@example-led.cn",
-            "tel_whatsapp_wechat": "+86 138 0000 1111",
-            "nature_of_product": "OEM",
-            "item_group_name": "LIGHTING",
-            "production_method": "Injection plastique",
-            "tag_1": "LED trailer",
-            "tag_2": "UFO LED",
-            "tag_3": "galvanized barrier",
-            "tag_4": "LED*",
-            "notes": "Met at Canton Fair — strong OEM capacity.",
-        },
-        {
-            "status": "Current",
-            "meet": "Alibaba",
-            "country": "China",
-            "cn_province": "ZHEJIANG PROVINCE",
-            "city": "Ningbo",
-            "factory_trading_name": "Ningbo Garden Tools Trading",
-            "website": "https://example-garden.cn",
-            "contact_name": "Li Ming",
-            "email": "li@example-garden.cn",
-            "tel_whatsapp_wechat": "+86 139 2222 3333",
-            "nature_of_product": "Finish product",
-            "item_group_name": "GARDENING MACHINES",
-            "production_method": "N/A",
-            "tag_1": "lawn mower",
-            "tag_2": "battery powered",
-            "tag_3": None,
-            "tag_4": None,
-            "notes": "Finish product catalog — good packaging.",
-        },
-        {
-            "status": "Prospect",
-            "meet": "Made in China",
-            "country": "Vietnam",
-            "cn_province": "N/A",
-            "city": "Ho Chi Minh City",
-            "factory_trading_name": "Saigon Hardware Export",
-            "website": "",
-            "contact_name": "Nguyen Anh",
-            "email": "anh@saigon-hw.vn",
-            "tel_whatsapp_wechat": "+84 90 555 6666",
-            "nature_of_product": "OEM",
-            "item_group_name": "HARDWARE",
-            "production_method": "Forging",
-            "tag_1": "welding",
-            "tag_2": "hand tools",
-            "tag_3": None,
-            "tag_4": None,
-            "notes": "Prospect — non-China OEM forging.",
-        },
-        {
-            "status": "Current",
-            "meet": "1688",
-            "country": "China",
-            "cn_province": "JIANGSU PROVINCE",
-            "city": "Suzhou",
-            "factory_trading_name": "Suzhou Industrial Components Ltd",
-            "website": "https://example-sic.cn",
-            "contact_name": "Chen Hao",
-            "email": "chen@example-sic.cn",
-            "tel_whatsapp_wechat": "WeChat: chenhao_sic",
-            "nature_of_product": "OEM",
-            "item_group_name": "INDUSTRIAL COMPONENT",
-            "production_method": "Machining",
-            "tag_1": "CNC",
-            "tag_2": "LED housing",
-            "tag_3": "precision parts",
-            "tag_4": "ISO9001",
-            "notes": "CNC specialist, flexible MOQ.",
-        },
-        {
-            "status": "Current",
-            "meet": "Canton Fair April 2027",
-            "country": "Thailand",
-            "cn_province": "N/A",
-            "city": "Bangkok",
-            "factory_trading_name": "Bangkok Power Tools Co.",
-            "website": "https://example-bpt.th",
-            "contact_name": "Somchai P.",
-            "email": "sales@example-bpt.th",
-            "tel_whatsapp_wechat": "+66 81 777 8888",
-            "nature_of_product": "Finish product",
-            "item_group_name": "POWER TOOLS",
-            "production_method": "N/A",
-            "tag_1": "cordless drill",
-            "tag_2": "power tools",
-            "tag_3": None,
-            "tag_4": None,
-            "notes": "SE Asia finish-product option.",
-        },
-        {
-            "status": "Prospect",
-            "meet": "Alibaba",
-            "country": "China",
-            "cn_province": "SHANDONG PROVINCE",
-            "city": "Qingdao",
-            "factory_trading_name": "Qingdao Agri Parts Works",
-            "website": "",
-            "contact_name": "Wang Fang",
-            "email": "fang@qd-agri.cn",
-            "tel_whatsapp_wechat": "",
-            "nature_of_product": "OEM",
-            "item_group_name": "AGRI PARTS",
-            "production_method": "Casting",
-            "tag_1": "casting",
-            "tag_2": "tractor parts",
-            "tag_3": None,
-            "tag_4": None,
-            "notes": "Email only — casting samples pending.",
-        },
-        {
-            "status": "Prospect",
-            "meet": "Canton Fair Oct 2027",
-            "country": "China",
-            "cn_province": "FUJIAN PROVINCE",
-            "city": "Xiamen",
-            "factory_trading_name": "Xiamen Battery Solutions",
-            "website": "https://xm-battery.cn",
-            "contact_name": "Huang Jie",
-            "email": "",
-            "tel_whatsapp_wechat": "+86 159 8888 1010",
-            "nature_of_product": "Finish product",
-            "item_group_name": "BATTERIES",
-            "production_method": "N/A",
-            "tag_1": "battery",
-            "tag_2": "Li-ion",
-            "tag_3": None,
-            "tag_4": None,
-            "notes": "Phone only contact.",
-        },
-        {
-            "status": "Inactive",
-            "meet": "1688",
-            "country": "China",
-            "cn_province": "HEBEI PROVINCE",
-            "city": "Cangzhou",
-            "factory_trading_name": "Cangzhou Steel Hardware Old Co",
-            "website": "",
-            "contact_name": "Zhao Lei",
-            "email": "zhao@cz-steel.cn",
-            "tel_whatsapp_wechat": "+86 137 4444 5555",
-            "nature_of_product": "OEM",
-            "item_group_name": "HARDWARE",
-            "production_method": "Forging",
-            "tag_1": "forging",
-            "tag_2": "hardware",
-            "tag_3": None,
-            "tag_4": None,
-            "notes": "Inactive — quality issues 2025.",
-        },
-        {
-            "status": "Current",
-            "meet": "Canton Fair Oct 2026",
-            "country": "China",
-            "cn_province": "SHANGHAI MUNICIPALITY",
-            "city": "Shanghai",
-            "factory_trading_name": "Shanghai Precision Machining",
-            "website": "https://sh-pm.cn",
-            "contact_name": "Sun Yi",
-            "email": "yi@sh-pm.cn",
-            "tel_whatsapp_wechat": "+86 21 6000 7788",
-            "nature_of_product": "OEM",
-            "item_group_name": "OEM INDUSTRIAL PARTS",
-            "production_method": "Machining",
-            "tag_1": "CNC",
-            "tag_2": "tolerance",
-            "tag_3": "aluminum",
-            "tag_4": None,
-            "notes": "Tight tolerances, fast samples.",
-        },
-        {
-            "status": "Prospect",
-            "meet": "Made in China",
-            "country": "India",
-            "cn_province": "N/A",
-            "city": "Pune",
-            "factory_trading_name": "Pune Power Machinery Traders",
-            "website": "",
-            "contact_name": "Rajesh K.",
-            "email": "rajesh@pune-pm.in",
-            "tel_whatsapp_wechat": "+91 98 2000 3344",
-            "nature_of_product": "Finish product",
-            "item_group_name": "POWER MACHINERY",
-            "production_method": "N/A",
-            "tag_1": "generator",
-            "tag_2": "power machinery",
-            "tag_3": None,
-            "tag_4": None,
-            "notes": "",
-        },
-        {
-            "status": "Current",
-            "meet": "Alibaba",
-            "country": "China",
-            "cn_province": "BEIJING MUNICIPALITY",
-            "city": "Beijing",
-            "factory_trading_name": "Beijing Road Safety Gear",
-            "website": "https://bj-road.cn",
-            "contact_name": "Liu Na",
-            "email": "na@bj-road.cn",
-            "tel_whatsapp_wechat": "+86 10 8888 2222",
-            "nature_of_product": "Finish product",
-            "item_group_name": "ROAD SAFETY ITEMS",
-            "production_method": "N/A",
-            "tag_1": "traffic cone",
-            "tag_2": "LED*",
-            "tag_3": "reflective",
-            "tag_4": None,
-            "notes": "Finish catalog for EU markets.",
-        },
-        {
-            "status": "Current",
-            "meet": "Canton Fair April 2028",
-            "country": "Japan",
-            "cn_province": "N/A",
-            "city": "Stuttgart",
-            "factory_trading_name": "Stuttgart Werkzeug Handel",
-            "website": "https://stuttgart-wt.de",
-            "contact_name": "Hans M.",
-            "email": "hans@stuttgart-wt.de",
-            "tel_whatsapp_wechat": "+49 711 555 010",
-            "nature_of_product": "Finish product",
-            "item_group_name": "HAND TOOLS",
-            "production_method": "N/A",
-            "tag_1": "hand tools",
-            "tag_2": "distribution",
-            "tag_3": None,
-            "tag_4": None,
-            "notes": "EU distribution partner.",
-        },
-        {
-            "status": "Prospect",
-            "meet": "1688",
-            "country": "China",
-            "cn_province": "ANHUI PROVINCE",
-            "city": "Hefei",
-            "factory_trading_name": "Hefei Lawncare OEM Factory",
-            "website": "",
-            "contact_name": "Xu Peng",
-            "email": "peng@hf-lawn.cn",
-            "tel_whatsapp_wechat": "+86 551 6666 1212",
-            "nature_of_product": "OEM",
-            "item_group_name": "GARDENING MACHINES",
-            "production_method": "Injection plastique",
-            "tag_1": "Lawnmower",
-            "tag_2": "battery",
-            "tag_3": None,
-            "tag_4": None,
-            "notes": "Fuzzy tag twin of lawn mower.",
-        },
-        {
-            "status": "Inactive",
-            "meet": "Canton Fair Oct 2028",
-            "country": "China",
-            "cn_province": "HUBEI PROVINCE",
-            "city": "Wuhan",
-            "factory_trading_name": "Wuhan Plastic Housewares",
-            "website": "https://wh-plastic.cn",
-            "contact_name": "Gao Rui",
-            "email": "rui@wh-plastic.cn",
-            "tel_whatsapp_wechat": "",
-            "nature_of_product": "OEM",
-            "item_group_name": "HOUSEHOLD APPLIANCES",
-            "production_method": "Injection plastique",
-            "tag_1": "plastic housing",
-            "tag_2": "injection",
-            "tag_3": None,
-            "tag_4": None,
-            "notes": "Inactive after ownership change.",
-        },
-        {
-            "status": "Current",
-            "meet": "Made in China",
-            "country": "Turkey",
-            "cn_province": "N/A",
-            "city": "Istanbul",
-            "factory_trading_name": "Istanbul Hardware Metals AS",
-            "website": "https://ist-hw.tr",
-            "contact_name": "Mehmet Y.",
-            "email": "mehmet@ist-hw.tr",
-            "tel_whatsapp_wechat": "+90 212 444 7788",
-            "nature_of_product": "OEM",
-            "item_group_name": "HARDWARE",
-            "production_method": "Forging",
-            "tag_1": "welding",
-            "tag_2": "bolts",
-            "tag_3": None,
-            "tag_4": None,
-            "notes": "Near-EU forging option.",
-        },
-        {
-            "status": "Current",
-            "meet": "Alibaba",
-            "country": "China",
-            "cn_province": "GUANGDONG PROVINCE",
-            "city": "Dongguan",
-            "factory_trading_name": "Dongguan LED Strip Works",
-            "website": "https://dg-ledstrip.cn",
-            "contact_name": "Tang Bo",
-            "email": "bo@dg-ledstrip.cn",
-            "tel_whatsapp_wechat": "WeChat: tangbo_led",
-            "nature_of_product": "OEM",
-            "item_group_name": "LIGHTING",
-            "production_method": "Injection plastique",
-            "tag_1": "LED*",
-            "tag_2": "flexible strip",
-            "tag_3": "waterproof",
-            "tag_4": "RGB",
-            "notes": "All four tags filled.",
-        },
-        {
-            "status": "Prospect",
-            "meet": "Canton Fair April 2029",
-            "country": "Taiwan, P.R.China",
-            "cn_province": "N/A",
-            "city": "Taichung",
-            "factory_trading_name": "Milano Componenti Industriali",
-            "website": "",
-            "contact_name": "Marco R.",
-            "email": "marco@milano-ci.it",
-            "tel_whatsapp_wechat": "",
-            "nature_of_product": "OEM",
-            "item_group_name": "INDUSTRIAL COMPONENT",
-            "production_method": "Machining",
-            "tag_1": "CNC",
-            "tag_2": "machining",
-            "tag_3": None,
-            "tag_4": None,
-            "notes": "Email only — EU machining.",
-        },
-        {
-            "status": "Current",
-            "meet": "1688",
-            "country": "China",
-            "cn_province": "ZHEJIANG PROVINCE",
-            "city": "Yiwu",
-            "factory_trading_name": "Yiwu Corporate Gifts Hub",
-            "website": "https://yw-gifts.cn",
-            "contact_name": "Jin Hua",
-            "email": "hua@yw-gifts.cn",
-            "tel_whatsapp_wechat": "+86 579 8888 3344",
-            "nature_of_product": "Finish product",
-            "item_group_name": "CORPORATE GIFTS",
-            "production_method": "N/A",
-            "tag_1": "corporate gifts",
-            "tag_2": "promotional",
-            "tag_3": None,
-            "tag_4": None,
-            "notes": "",
-        },
-        {
-            "status": "Current",
-            "meet": "Canton Fair Oct 2029",
-            "country": "South Korea",
-            "cn_province": "N/A",
-            "city": "Busan",
-            "factory_trading_name": "Busan Electric Components",
-            "website": "https://busan-ec.kr",
-            "contact_name": "Park Ji",
-            "email": "ji@busan-ec.kr",
-            "tel_whatsapp_wechat": "+82 51 700 2211",
-            "nature_of_product": "OEM",
-            "item_group_name": "ELECTRIC/TRONIC COMP",
-            "production_method": "Machining",
-            "tag_1": "PCB",
-            "tag_2": "connectors",
-            "tag_3": None,
-            "tag_4": None,
-            "notes": "Korea OEM electronics.",
-        },
-        {
-            "status": "Prospect",
-            "meet": "Made in China",
-            "country": "Malaysia",
-            "cn_province": "N/A",
-            "city": "Penang",
-            "factory_trading_name": "Penang Workshop Equip Sdn Bhd",
-            "website": "",
-            "contact_name": "Aisha R.",
-            "email": "",
-            "tel_whatsapp_wechat": "+60 12 345 6789",
-            "nature_of_product": "Finish product",
-            "item_group_name": "WORKSHOP EQUIPMENT",
-            "production_method": "N/A",
-            "tag_1": "bench vise",
-            "tag_2": "workshop",
-            "tag_3": None,
-            "tag_4": None,
-            "notes": "Phone only — prospect SE Asia.",
-        },
-        {
-            "status": "Current",
-            "meet": "Alibaba",
-            "country": "China",
-            "cn_province": "GUANGDONG PROVINCE",
-            "city": "Zhongshan",
-            "factory_trading_name": "Zhongshan Sanitary Bath OEM",
-            "website": "https://zs-bath.cn",
-            "contact_name": "Liang Xin",
-            "email": "xin@zs-bath.cn",
-            "tel_whatsapp_wechat": "+86 760 2222 9090",
-            "nature_of_product": "OEM",
-            "item_group_name": "SANITARY BATH EQUIP",
-            "production_method": "Casting",
-            "tag_1": "faucet",
-            "tag_2": "casting",
-            "tag_3": None,
-            "tag_4": None,
-            "notes": "Casting + finishing lines.",
-        },
-        {
-            "status": "Current",
-            "meet": "Canton Fair April 2030",
-            "country": "Indonesia",
-            "cn_province": "N/A",
-            "city": "Jakarta",
-            "factory_trading_name": "Jakarta Tyre & Wheel Supply",
-            "website": "https://jkt-tyre.id",
-            "contact_name": "Budi S.",
-            "email": "budi@jkt-tyre.id",
-            "tel_whatsapp_wechat": "+62 812 3333 4444",
-            "nature_of_product": "Finish product",
-            "item_group_name": "TYRE/TUBES/WHEELS",
-            "production_method": "N/A",
-            "tag_1": "wheel",
-            "tag_2": "tube",
-            "tag_3": None,
-            "tag_4": None,
-            "notes": "Stock finish products.",
-        },
-        {
-            "status": "Prospect",
-            "meet": "1688",
-            "country": "China",
-            "cn_province": "JIANGSU PROVINCE",
-            "city": "Wuxi",
-            "factory_trading_name": "Wuxi New Energy Packs",
-            "website": "",
-            "contact_name": "Zhou Min",
-            "email": "min@wx-nep.cn",
-            "tel_whatsapp_wechat": "+86 510 7777 1616",
-            "nature_of_product": "OEM",
-            "item_group_name": "NEW ENERGY RESOURCES",
-            "production_method": "Machining",
-            "tag_1": "battery",
-            "tag_2": "solar mount",
-            "tag_3": "CNC",
-            "tag_4": None,
-            "notes": "Prospect for solar mounts.",
-        },
-        {
-            "status": "Current",
-            "meet": "Canton Fair Oct 2030",
-            "country": "Singapore",
-            "cn_province": "N/A",
-            "city": "Poznan",
-            "factory_trading_name": "Poznan Packaging Solutions",
-            "website": "https://poznan-pack.pl",
-            "contact_name": "Anna K.",
-            "email": "anna@poznan-pack.pl",
-            "tel_whatsapp_wechat": "+48 61 222 3344",
-            "nature_of_product": "Finish product",
-            "item_group_name": "PACKING/PACKAGING",
-            "production_method": "N/A",
-            "tag_1": "carton",
-            "tag_2": "packaging",
-            "tag_3": None,
-            "tag_4": None,
-            "notes": "EU packaging partner.",
-        },
-        {
-            "status": "Current",
-            "meet": "Made in China",
-            "country": "China",
-            "cn_province": "SHANDONG PROVINCE",
-            "city": "Weifang",
-            "factory_trading_name": "Weifang Agri Machines Co",
-            "website": "https://wf-agri.cn",
-            "contact_name": "Ma Jun",
-            "email": "jun@wf-agri.cn",
-            "tel_whatsapp_wechat": "+86 536 1111 2222",
-            "nature_of_product": "Finish product",
-            "item_group_name": "AGRI MACHINES",
-            "production_method": "N/A",
-            "tag_1": "harvester",
-            "tag_2": "spare parts",
-            "tag_3": None,
-            "tag_4": None,
-            "notes": "Finish machines + aftersales.",
-        },
-        {
-            "status": "Inactive",
-            "meet": "Alibaba",
-            "country": "Vietnam",
-            "cn_province": "N/A",
-            "city": "Hanoi",
-            "factory_trading_name": "Hanoi Pet Products Export",
-            "website": "",
-            "contact_name": "Tran Hoa",
-            "email": "hoa@hn-pet.vn",
-            "tel_whatsapp_wechat": "+84 24 5555 6666",
-            "nature_of_product": "Finish product",
-            "item_group_name": "PET PRODUCTS",
-            "production_method": "N/A",
-            "tag_1": "pet products",
-            "tag_2": "export",
-            "tag_3": None,
-            "tag_4": None,
-            "notes": "Inactive — stopped exporting.",
-        },
-        {
-            "status": "Current",
-            "meet": "Canton Fair Oct 2026",
-            "country": "China",
-            "cn_province": "FUJIAN PROVINCE",
-            "city": "Quanzhou",
-            "factory_trading_name": "Quanzhou Fishing Gear Factory",
-            "website": "https://qz-fish.cn",
-            "contact_name": "Cai Rong",
-            "email": "rong@qz-fish.cn",
-            "tel_whatsapp_wechat": "+86 595 3333 7788",
-            "nature_of_product": "OEM",
-            "item_group_name": "FISHING ITEMS",
-            "production_method": "Injection plastique",
-            "tag_1": "reel",
-            "tag_2": "plastic mold",
-            "tag_3": None,
-            "tag_4": None,
-            "notes": "OEM plastic fishing parts.",
-        },
-        {
-            "status": "Prospect",
-            "meet": "1688",
-            "country": "China",
-            "cn_province": "GUANGDONG PROVINCE",
-            "city": "Shenzhen",
-            "factory_trading_name": "Shenzhen Vehicle Access Trade",
-            "website": "",
-            "contact_name": "He Lin",
-            "email": "lin@sz-va.cn",
-            "tel_whatsapp_wechat": "+86 755 8888 9999",
-            "nature_of_product": "Finish product",
-            "item_group_name": "VEHICULE ACCESSORIES",
-            "production_method": "N/A",
-            "tag_1": "LED*",
-            "tag_2": "car light",
-            "tag_3": "12V",
-            "tag_4": None,
-            "notes": "Prospect auto accessories.",
-        },
-        {
-            "status": "Current",
-            "meet": "Canton Fair April 2027",
-            "country": "Thailand",
-            "cn_province": "N/A",
-            "city": "Chonburi",
-            "factory_trading_name": "Chonburi Casting Parts Co",
-            "website": "https://chon-cast.th",
-            "contact_name": "Niran T.",
-            "email": "niran@chon-cast.th",
-            "tel_whatsapp_wechat": "+66 38 222 1111",
-            "nature_of_product": "OEM",
-            "item_group_name": "OEM INDUSTRIAL PARTS",
-            "production_method": "Casting",
-            "tag_1": "casting",
-            "tag_2": "iron",
-            "tag_3": "welding",
-            "tag_4": None,
-            "notes": "Thai casting for industrial OEM.",
-        },
-        {
-            "status": "Current",
-            "meet": "Made in China",
-            "country": "China",
-            "cn_province": "ZHEJIANG PROVINCE",
-            "city": "Hangzhou",
-            "factory_trading_name": "Hangzhou Furniture Components",
-            "website": "https://hz-furn.cn",
-            "contact_name": "Ye Qing",
-            "email": "qing@hz-furn.cn",
-            "tel_whatsapp_wechat": "+86 571 6666 4545",
-            "nature_of_product": "OEM",
-            "item_group_name": "FURNITURES",
-            "production_method": "Machining",
-            "tag_1": "CNC",
-            "tag_2": "wood metal",
-            "tag_3": None,
-            "tag_4": None,
-            "notes": "Furniture hardware OEM.",
-        },
+    data = _load_seed_data()
+    countries = [_clean_lookup_value(v) for v in data["countries"]]
+    provinces = [v for v in (_clean_lookup_value(x) for x in data["cn_provinces"]) if v != "N/A"]
+    item_groups = [_clean_lookup_value(v) for v in data["item_groups"]]
+    groupings = [_clean_lookup_value(v) for v in data["groupings"]]
+    methods = [_clean_lookup_value(v) for v in data["production_methods"]]
+    natures = [_clean_lookup_value(v) for v in data["natures"]]
+    meets = [_clean_lookup_value(str(v)) for v in data["meets"]]
+    statuses = list(config.STATUS_VALUES)
+    interests = list(config.INTEREST_LEVEL_VALUES)
+
+    city_by_country = {
+        "China": ["Foshan", "Ningbo", "Suzhou", "Qingdao", "Dongguan", "Wenzhou", "Hefei", "Shanghai"],
+        "Taiwan": ["Taipei", "Taichung", "Kaohsiung"],
+        "Vietnam": ["Ho Chi Minh City", "Hanoi", "Da Nang"],
+        "Thailand": ["Bangkok", "Chonburi", "Chiang Mai"],
+        "Philippines": ["Manila", "Cebu", "Davao"],
+        "Japan": ["Osaka", "Nagoya", "Tokyo"],
+        "India": ["Pune", "Ahmedabad", "Chennai"],
+        "Indonesia": ["Jakarta", "Surabaya", "Bandung"],
+        "Malaysia": ["Kuala Lumpur", "Penang", "Johor Bahru"],
+        "South Korea": ["Seoul", "Busan", "Incheon"],
+        "Hong Kong": ["Kowloon", "Tsuen Wan", "Sha Tin"],
+    }
+    free_tag_pool = [
+        "cordless", "heavy duty", "OEM grade", "export pack", "CE certified",
+        "galvanized", "battery powered", "quick ship", "custom mold", "after sales",
+        "lawn mower", "LED strip", "carbide tip", "PTO shaft", "inner tube 16",
+        "workshop bench", "fencing mesh", "plastic housing", "forged head", "CNC part",
     ]
+    first_names = [
+        "Wei", "Ming", "Anh", "Somchai", "Hao", "Fang", "Rajesh", "Budi", "Ji", "Mei",
+        "Kenji", "Priya", "Lin", "Siti", "Min", "Yuki", "Arjun", "Tran", "Park", "Chen",
+    ]
+    last_names = [
+        "Zhang", "Li", "Nguyen", "Wang", "Patel", "Kim", "Tanaka", "Santoso", "Chen", "Liu",
+        "Huang", "Suzuki", "Singh", "Garcia", "Wong", "Lim", "Choi", "Yamamoto", "Das", "Ho",
+    ]
+    company_words = [
+        "Lighting", "Garden", "Hardware", "Agri", "Tools", "Machinery", "Battery", "Auto",
+        "Industrial", "Precision", "Export", "Trading", "OEM", "Parts", "Workshop", "Metal",
+        "Plastic", "Forge", "Casting", "Electric", "Fence", "Wheel", "Blade", "Power", "Gift",
+    ]
+
+    samples: list[dict] = []
+    for i in range(1, 51):
+        country = countries[(i - 1) % len(countries)]
+        nature = natures[(i - 1) % len(natures)]
+        grouping = groupings[(i - 1) % len(groupings)]
+        meet = meets[(i - 1) % len(meets)]
+        item_group = item_groups[(i - 1) % len(item_groups)]
+        method = methods[(i - 1) % len(methods)]
+        status = statuses[(i - 1) % len(statuses)]
+        interest = interests[(i - 1) % len(interests)]
+        cities = city_by_country.get(country, ["City"])
+        city = cities[(i - 1) % len(cities)]
+        if country == "China":
+            cn_province = provinces[(i - 1) % len(provinces)]
+        else:
+            cn_province = "N/A"
+
+        # Finish product needs item group; clear production method.
+        # OEM needs production method; still set item group for demo coverage.
+        if nature == "Finish product":
+            production_method = None
+            item_group_name = item_group
+        else:
+            production_method = method
+            item_group_name = item_group if i % 3 else None
+
+        has_website = i % 3 != 0
+        contact_mode = i % 3  # 0 email only, 1 phone only, 2 both
+        email = f"sales{i:02d}@demo-supplier.example" if contact_mode != 1 else ""
+        tel = f"+86 138 {1000 + i:04d} {2000 + i:04d}" if contact_mode != 0 else ""
+        if country == "Vietnam" and tel:
+            tel = f"+84 90 {100 + i:03d} {200 + i:03d}"
+        elif country == "India" and tel:
+            tel = f"+91 98 {1000 + i:04d} {i:04d}"
+        elif country == "Japan" and tel:
+            tel = f"+81 90 {1000 + i:04d} {i:04d}"
+        elif country == "Thailand" and tel:
+            tel = f"+66 81 {100 + i:03d} {200 + i:03d}"
+
+        tag2 = free_tag_pool[(i - 1) % len(free_tag_pool)]
+        tag3 = free_tag_pool[(i + 7) % len(free_tag_pool)] if i % 2 == 0 else None
+        tag4 = free_tag_pool[(i + 13) % len(free_tag_pool)] if i % 5 == 0 else None
+
+        fn = first_names[(i - 1) % len(first_names)]
+        ln = last_names[(i * 3) % len(last_names)]
+        cw1 = company_words[(i - 1) % len(company_words)]
+        cw2 = company_words[(i * 5) % len(company_words)]
+        factory = f"{city} {cw1} {cw2} Co. #{i:02d}"
+
+        samples.append(
+            {
+                "status": status,
+                "interest_level": interest,
+                "meet": meet,
+                "country": country,
+                "cn_province": cn_province,
+                "city": city,
+                "factory_trading_name": factory,
+                "website": f"https://demo-{i:02d}.example.com" if has_website else "",
+                "contact_name": f"{fn} {ln}",
+                "email": email,
+                "tel_whatsapp_wechat": tel,
+                "nature_of_product": nature,
+                "item_group_name": item_group_name,
+                "production_method": production_method,
+                "tag_1": grouping,
+                "tag_2": tag2,
+                "tag_3": tag3,
+                "tag_4": tag4,
+                "notes": f"Demo supplier {i}/50 — {nature}, {grouping}, {country}.",
+            }
+        )
+
     cols = [
         "short_code", "status", "interest_level", "meet", "country", "cn_province", "city",
         "factory_trading_name", "website", "contact_name", "email",
@@ -887,19 +457,17 @@ def _seed_sample_suppliers(conn: sqlite3.Connection) -> None:
         "production_method", "tag_1", "tag_2", "tag_3", "tag_4", "notes",
         "created_at", "updated_at", "created_by", "updated_by",
     ]
-    interest_cycle = config.INTEREST_LEVEL_VALUES  # Must visit, Interesting, In Case
     for i, s in enumerate(samples, start=1):
         s = dict(s)
         s["short_code"] = f"SUP-{i:04d}"
-        if not s.get("interest_level"):
-            s["interest_level"] = interest_cycle[(i - 1) % len(interest_cycle)]
         values = [s.get(c) for c in cols[:-4]] + [now, now, admin_id, admin_id]
         placeholders = ",".join("?" * len(cols))
         conn.execute(
             f"INSERT INTO suppliers ({','.join(cols)}) VALUES ({placeholders})",
             values,
         )
-        for ti in range(1, 5):
+        # Free tags (2–4) feed similarity; Grouping stays on the fixed list.
+        for ti in range(2, 5):
             tag = s.get(f"tag_{ti}")
             if tag:
                 conn.execute(
@@ -1072,10 +640,12 @@ def validate_supplier_payload(data: dict[str, Any], lookups: dict[str, list[str]
 
     # Exact seed values: "OEM" and "Finish product"
     if nature == "OEM":
-        if not method or method == "N/A":
+        if not method:
             errors.append("Production Method is required when Nature of Product is OEM.")
         elif method not in lookups.get("production_method", []):
             errors.append("Production Method must be chosen from the list.")
+    elif method and method not in lookups.get("production_method", []):
+        errors.append("Production Method must be chosen from the list.")
 
     if nature == "Finish product":
         if not item_group:
@@ -1107,6 +677,8 @@ def validate_supplier_payload(data: dict[str, Any], lookups: dict[str, list[str]
     grouping = (data.get("tag_1") or "").strip()
     if not grouping:
         errors.append("Grouping is required.")
+    elif grouping not in get_grouping_options():
+        errors.append("Grouping must be chosen from the list.")
 
     free_tags = [
         (data.get("tag_2") or "").strip(),
@@ -1141,7 +713,7 @@ def normalize_supplier_payload(data: dict[str, Any]) -> dict[str, Any]:
     out["short_code"] = sc or None
 
     if nature == "Finish product":
-        out["production_method"] = "N/A"
+        out["production_method"] = None
     if country != "China":
         out["cn_province"] = "N/A"
 

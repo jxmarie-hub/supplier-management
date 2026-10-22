@@ -111,8 +111,10 @@ def _enrich_attachments(attachments: list[dict]) -> list[dict]:
 
 
 def _grouping_options(conn, current: str | None = None) -> list[str]:
-    """Temporary Grouping dropdown options from known tags until Jean sends a list."""
-    opts = list_all_known_tag_labels(conn)
+    """Fixed Grouping dropdown from Jean's seed list."""
+    from app.database import get_grouping_options
+
+    opts = get_grouping_options()
     cur = (current or "").strip()
     if cur and cur not in opts:
         opts = [cur] + opts
