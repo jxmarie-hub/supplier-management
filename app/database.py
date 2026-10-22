@@ -148,6 +148,8 @@ def init_db() -> None:
 def _seed_if_empty(conn: sqlite3.Connection) -> None:
     user_count = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
     lookup_count = conn.execute("SELECT COUNT(*) FROM lookup_values").fetchone()[0]
+    supplier_count = conn.execute("SELECT COUNT(*) FROM suppliers").fetchone()[0]
+    demo_target = 28
 
     if lookup_count == 0:
         _seed_lookups(conn)
@@ -162,6 +164,12 @@ def _seed_if_empty(conn: sqlite3.Connection) -> None:
             "INSERT INTO users (username, password_hash, role, is_active, created_at) VALUES (?, ?, ?, 1, ?)",
             ("Utilisateur1", hash_password("EssayeCa"), "standard", now),
         )
+        _seed_sample_suppliers(conn)
+    elif supplier_count < demo_target:
+        # Demo refresh: replace suppliers when seed grew (keeps users/passwords).
+        conn.execute("DELETE FROM attachments")
+        conn.execute("DELETE FROM suppliers")
+        conn.execute("DELETE FROM known_tags")
         _seed_sample_suppliers(conn)
 
 
