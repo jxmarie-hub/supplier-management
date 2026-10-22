@@ -3,12 +3,17 @@
 {% block container_class %} wide{% endblock %}
 {% block content %}
 
-{% if not searched %}
 <div class="page-head">
-  <h1>Search</h1>
+  <h1>{% if searched %}{{ results|length }} result(s){% else %}Search{% endif %}</h1>
+  {% if searched %}
+  <div class="row-actions">
+    <a class="btn" href="/search">Clear filters</a>
+    <a class="btn" href="/search/export?{{ request.query_string.decode() }}">Export Excel</a>
+  </div>
+  {% endif %}
 </div>
 
-{% if saved_searches %}
+{% if not searched and saved_searches %}
 <section class="card">
   <h2>Saved searches ({{ saved_searches|length }}/{{ max_saved }})</h2>
   <div class="card-body">
@@ -168,28 +173,7 @@
   </section>
 </form>
 
-{% else %}
-{# Results-only view #}
-<div class="toolbar">
-  <div>
-    <h1>{{ results|length }} result(s)</h1>
-  </div>
-  <div class="row-actions">
-    <a class="btn btn-primary" href="/search">New search</a>
-    <a class="btn" href="/search/export?{{ request.query_string.decode() }}">Export Excel</a>
-  </div>
-</div>
-
-{% if active_filters %}
-<section class="card filter-summary">
-  <h2 class="filter-summary-title">Search criteria</h2>
-  <ul class="filter-summary-list">
-    {% for f in active_filters %}
-    <li><strong>{{ f.label }}:</strong> {{ f.value }}</li>
-    {% endfor %}
-  </ul>
-</section>
-{% endif %}
+{% if searched %}
 
 {% if saved_searches|length < max_saved %}
 <section class="card">
@@ -200,6 +184,25 @@
     <input class="input-lg" name="name" placeholder="Save this search as favorite…" required maxlength="80">
     <button type="submit" class="btn btn-primary" onclick="document.getElementById('filters-json').value=JSON.stringify(Object.fromEntries(new URLSearchParams(window.location.search)))">Save favorite</button>
   </form>
+  </div>
+</section>
+{% endif %}
+
+{% if saved_searches %}
+<section class="card">
+  <h2>Saved searches ({{ saved_searches|length }}/{{ max_saved }})</h2>
+  <div class="card-body">
+  <ul class="fav-list">
+    {% for s in saved_searches %}
+    <li>
+      <a class="btn btn-sm" href="/search?{% for k,v in s.filters.items() %}{{ k }}={{ v|urlencode }}{% if not loop.last %}&{% endif %}{% endfor %}">{{ s.name }}</a>
+      <form method="post" action="/search/favorites/{{ s.id }}/delete" class="inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button type="submit" class="btn btn-ghost btn-sm">Delete</button>
+      </form>
+    </li>
+    {% endfor %}
+  </ul>
   </div>
 </section>
 {% endif %}
