@@ -143,6 +143,41 @@ def init_db() -> None:
     with db_session() as conn:
         conn.executescript(SCHEMA_SQL)
         _seed_if_empty(conn)
+        _sync_asia_countries(conn)
+
+
+
+def _sync_asia_countries(conn: sqlite3.Connection) -> None:
+    """Keep country lookup list aligned with Asia-only seed_lookups.json."""
+    path = config.SEED_LOOKUPS_PATH
+    with open(path, encoding="utf-8") as f:
+        data = json.load(f)
+    allowed = {_clean_lookup_value(v) for v in data.get("countries", []) if str(v).strip()}
+    if not allowed:
+        return
+    rows = conn.execute(
+        "SELECT id, value FROM lookup_values WHERE lookup_type = 'country'"
+    ).fetchall()
+    for row in rows:
+        if (row["value"] or "").strip() not in allowed:
+            conn.execute("DELETE FROM lookup_values WHERE id = ?", (row["id"],))
+    existing = {
+        (r["value"] or "").strip()
+        for r in conn.execute(
+            "SELECT value FROM lookup_values WHERE lookup_type = 'country'"
+        ).fetchall()
+    }
+    order = 0
+    for raw in data.get("countries", []):
+        value = _clean_lookup_value(raw)
+        if not value:
+            continue
+        if value not in existing:
+            conn.execute(
+                "INSERT OR IGNORE INTO lookup_values (lookup_type, value, sort_order, is_active) VALUES (?, ?, ?, 1)",
+                ("country", value, order),
+            )
+        order += 1
 
 
 def _seed_if_empty(conn: sqlite3.Connection) -> None:
@@ -165,12 +200,22 @@ def _seed_if_empty(conn: sqlite3.Connection) -> None:
             ("Utilisateur1", hash_password("EssayeCa"), "standard", now),
         )
         _seed_sample_suppliers(conn)
-    elif supplier_count < demo_target:
-        # Demo refresh: replace suppliers when seed grew (keeps users/passwords).
-        conn.execute("DELETE FROM attachments")
-        conn.execute("DELETE FROM suppliers")
-        conn.execute("DELETE FROM known_tags")
-        _seed_sample_suppliers(conn)
+    else:
+        asia = set()
+        path = config.SEED_LOOKUPS_PATH
+        with open(path, encoding="utf-8") as f:
+            asia = {_clean_lookup_value(v) for v in json.load(f).get("countries", []) if str(v).strip()}
+        bad = conn.execute(
+            "SELECT COUNT(*) FROM suppliers WHERE country IS NOT NULL AND TRIM(country) != '' AND country NOT IN (%s)"
+            % (",".join("?" * len(asia)) if asia else "NULL"),
+            tuple(asia) if asia else (),
+        ).fetchone()[0] if asia else 0
+        if supplier_count < demo_target or bad:
+            # Demo refresh: replace suppliers when seed grew or non-Asia rows remain.
+            conn.execute("DELETE FROM attachments")
+            conn.execute("DELETE FROM suppliers")
+            conn.execute("DELETE FROM known_tags")
+            _seed_sample_suppliers(conn)
 
 
 def _clean_lookup_value(value: str) -> str:
@@ -439,7 +484,7 @@ def _seed_sample_suppliers(conn: sqlite3.Connection) -> None:
         {
             "status": "Current",
             "meet": "Canton Fair April 2028",
-            "country": "Germany",
+            "country": "Japan",
             "cn_province": "N/A",
             "city": "Stuttgart",
             "factory_trading_name": "Stuttgart Werkzeug Handel",
@@ -539,9 +584,9 @@ def _seed_sample_suppliers(conn: sqlite3.Connection) -> None:
         {
             "status": "Prospect",
             "meet": "Canton Fair April 2029",
-            "country": "Italy",
+            "country": "Taiwan, P.R.China",
             "cn_province": "N/A",
-            "city": "Milan",
+            "city": "Taichung",
             "factory_trading_name": "Milano Componenti Industriali",
             "website": "",
             "contact_name": "Marco R.",
@@ -679,7 +724,7 @@ def _seed_sample_suppliers(conn: sqlite3.Connection) -> None:
         {
             "status": "Current",
             "meet": "Canton Fair Oct 2030",
-            "country": "Poland",
+            "country": "Singapore",
             "cn_province": "N/A",
             "city": "Poznan",
             "factory_trading_name": "Poznan Packaging Solutions",
