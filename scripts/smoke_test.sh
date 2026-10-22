@@ -83,11 +83,12 @@ echo "tag_http=$CODE"
 test "$CODE" = "409"
 grep -qi "Similar tag" /tmp/sm_tag.html && echo "tag_unify_prompt_ok"
 
-echo "== Wildcard search (results only + New search) =="
+echo "== Wildcard search (filters stay + results) =="
 SR=$(curl -fsS -c "$COOKIE" -b "$COOKIE" "$BASE/search?q=${SMOKE_NAME// /+}")
 echo "$SR" | grep -q "$SMOKE_NAME"
-echo "$SR" | grep -q "New search"
-echo "$SR" | grep -qv 'id="search-form"' && echo "results_only_ok"
+echo "$SR" | grep -q 'id="search-form"'
+echo "$SR" | grep -q "Run search"
+echo "$SR" | grep -q 'data-table'
 
 echo "== Export =="
 curl -fsS -c "$COOKIE" -b "$COOKIE" "$BASE/search/export?country=China" -o /tmp/sm_export.xlsx
