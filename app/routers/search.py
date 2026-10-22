@@ -17,7 +17,15 @@ from app.database import (
     supplier_tags_display,
     utc_now,
 )
-from app.deps import current_user, flash, login_redirect, render, require_csrf, require_login
+from app.deps import (
+    current_user,
+    flash,
+    load_visible_columns,
+    login_redirect,
+    render,
+    require_csrf,
+    require_login,
+)
 
 router = APIRouter(tags=["search"])
 
@@ -80,6 +88,7 @@ def search_page(request: Request):
             except Exception:
                 d["filters"] = {}
             saved.append(d)
+    visible = load_visible_columns(user["id"])
     return render(
         request,
         "search.html",
@@ -91,6 +100,8 @@ def search_page(request: Request):
             "saved_searches": saved,
             "searched": bool(filters),
             "max_saved": config.MAX_SAVED_SEARCHES,
+            "visible_columns": visible,
+            "column_labels": dict(config.ALL_COLUMNS),
             "nav_active": "search",
         },
     )

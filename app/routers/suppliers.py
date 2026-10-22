@@ -161,7 +161,12 @@ def home(
 
 
 @router.post("/columns")
-def save_columns(request: Request, csrf_token: str = Form(""), columns: list[str] = Form([])):
+def save_columns(
+    request: Request,
+    csrf_token: str = Form(""),
+    columns: list[str] = Form([]),
+    next: str = Form(""),
+):
     user = require_login(request)
     require_csrf(request, csrf_token)
     if isinstance(columns, str):
@@ -169,7 +174,10 @@ def save_columns(request: Request, csrf_token: str = Form(""), columns: list[str
     with db_session() as conn:
         set_user_columns(conn, user["id"], list(columns))
     flash(request, "Column preferences saved.", "success")
-    return RedirectResponse(url="/", status_code=303)
+    dest = (next or "").strip()
+    if not dest.startswith("/") or dest.startswith("//"):
+        dest = "/"
+    return RedirectResponse(url=dest, status_code=303)
 
 
 @router.get("/suppliers/new")

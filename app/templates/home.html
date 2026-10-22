@@ -14,6 +14,7 @@
   <summary>Show / hide columns</summary>
   <form method="post" action="/columns" class="columns-form">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="next" value="/{% if q %}?q={{ q|urlencode }}&sort={{ sort }}&dir={{ dir }}{% endif %}">
     {% for key, label in all_columns %}
       <label class="check">
         <input type="checkbox" name="columns" value="{{ key }}" {% if key in visible_columns %}checked{% endif %}>
