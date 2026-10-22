@@ -36,6 +36,7 @@ router = APIRouter(tags=["suppliers"])
 SUPPLIER_FIELDS = [
     "short_code",
     "status",
+    "interest_level",
     "meet",
     "country",
     "cn_province",
@@ -111,6 +112,7 @@ def _form_context(
         "errors": errors,
         "duplicates": duplicates,
         "status_values": config.STATUS_VALUES,
+        "interest_level_values": config.INTEREST_LEVEL_VALUES,
         "attachment_types": config.ATTACHMENT_TYPES,
         "need_duplicate_confirm": need_duplicate_confirm,
         "tag_issues": tag_issues or [],
@@ -201,6 +203,7 @@ async def create_supplier(
     csrf_token: str = Form(""),
     short_code: str = Form(""),
     status: str = Form("Current"),
+    interest_level: str = Form(""),
     meet: str = Form(""),
     country: str = Form("China"),
     cn_province: str = Form(""),
@@ -229,7 +232,7 @@ async def create_supplier(
     user = require_login(request)
     require_csrf(request, csrf_token)
     payload = _form_to_payload(
-        short_code=short_code, status=status, meet=meet, country=country,
+        short_code=short_code, status=status, interest_level=interest_level, meet=meet, country=country,
         cn_province=cn_province, city=city, factory_trading_name=factory_trading_name,
         website=website, contact_name=contact_name, email=email,
         tel_whatsapp_wechat=tel_whatsapp_wechat, nature_of_product=nature_of_product,
@@ -374,6 +377,7 @@ async def update_supplier(
     csrf_token: str = Form(""),
     short_code: str = Form(""),
     status: str = Form("Current"),
+    interest_level: str = Form(""),
     meet: str = Form(""),
     country: str = Form("China"),
     cn_province: str = Form(""),
@@ -402,7 +406,7 @@ async def update_supplier(
     user = require_login(request)
     require_csrf(request, csrf_token)
     payload = _form_to_payload(
-        short_code=short_code, status=status, meet=meet, country=country,
+        short_code=short_code, status=status, interest_level=interest_level, meet=meet, country=country,
         cn_province=cn_province, city=city, factory_trading_name=factory_trading_name,
         website=website, contact_name=contact_name, email=email,
         tel_whatsapp_wechat=tel_whatsapp_wechat, nature_of_product=nature_of_product,

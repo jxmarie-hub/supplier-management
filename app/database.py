@@ -79,6 +79,7 @@ CREATE TABLE IF NOT EXISTS suppliers (
     short_code TEXT UNIQUE,
     status TEXT NOT NULL DEFAULT 'Current'
         CHECK(status IN ('Current', 'Prospect', 'Inactive')),
+    interest_level TEXT,
     meet TEXT,
     country TEXT NOT NULL,
     cn_province TEXT,
@@ -142,9 +143,18 @@ CREATE INDEX IF NOT EXISTS idx_saved_searches_user ON saved_searches(user_id);
 def init_db() -> None:
     with db_session() as conn:
         conn.executescript(SCHEMA_SQL)
+        _migrate_schema(conn)
         _seed_if_empty(conn)
         _sync_asia_countries(conn)
 
+
+
+
+def _migrate_schema(conn: sqlite3.Connection) -> None:
+    """Additive SQLite migrations for existing databases."""
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(suppliers)").fetchall()}
+    if "interest_level" not in cols:
+        conn.execute("ALTER TABLE suppliers ADD COLUMN interest_level TEXT")
 
 
 def _sync_asia_countries(conn: sqlite3.Connection) -> None:
@@ -210,8 +220,12 @@ def _seed_if_empty(conn: sqlite3.Connection) -> None:
             % (",".join("?" * len(asia)) if asia else "NULL"),
             tuple(asia) if asia else (),
         ).fetchone()[0] if asia else 0
-        if supplier_count < demo_target or bad:
-            # Demo refresh: replace suppliers when seed grew or non-Asia rows remain.
+        interest_filled = conn.execute(
+            "SELECT COUNT(*) FROM suppliers WHERE interest_level IS NOT NULL AND TRIM(interest_level) != ''"
+        ).fetchone()[0]
+        missing_interest = supplier_count > 0 and interest_filled == 0
+        if supplier_count < demo_target or bad or missing_interest:
+            # Demo refresh: replace suppliers when seed grew, non-Asia rows remain, or interest unset.
             conn.execute("DELETE FROM attachments")
             conn.execute("DELETE FROM suppliers")
             conn.execute("DELETE FROM known_tags")
@@ -863,15 +877,18 @@ def _seed_sample_suppliers(conn: sqlite3.Connection) -> None:
         },
     ]
     cols = [
-        "short_code", "status", "meet", "country", "cn_province", "city",
+        "short_code", "status", "interest_level", "meet", "country", "cn_province", "city",
         "factory_trading_name", "website", "contact_name", "email",
         "tel_whatsapp_wechat", "nature_of_product", "item_group_name",
         "production_method", "tag_1", "tag_2", "tag_3", "tag_4", "notes",
         "created_at", "updated_at", "created_by", "updated_by",
     ]
+    interest_cycle = config.INTEREST_LEVEL_VALUES  # Must visit, Interesting, In Case
     for i, s in enumerate(samples, start=1):
         s = dict(s)
         s["short_code"] = f"SUP-{i:04d}"
+        if not s.get("interest_level"):
+            s["interest_level"] = interest_cycle[(i - 1) % len(interest_cycle)]
         values = [s.get(c) for c in cols[:-4]] + [now, now, admin_id, admin_id]
         placeholders = ",".join("?" * len(cols))
         conn.execute(
@@ -982,7 +999,7 @@ def build_search_where(filters: dict[str, Any]) -> tuple[str, list[Any]]:
             params.append(like)
 
     exact_fields = [
-        "status", "meet", "country", "cn_province",
+        "status", "interest_level", "meet", "country", "cn_province",
         "nature_of_product", "item_group_name", "production_method",
     ]
     for field in exact_fields:
@@ -1066,6 +1083,10 @@ def validate_supplier_payload(data: dict[str, Any], lookups: dict[str, list[str]
     if status not in ("Current", "Prospect", "Inactive"):
         errors.append("Status must be Current, Prospect, or Inactive.")
 
+    interest = (data.get("interest_level") or "").strip()
+    if interest and interest not in config.INTEREST_LEVEL_VALUES:
+        errors.append("Interest level must be Must visit, Interesting, or In Case.")
+
     for field, key in [("meet", "meet"), ("item_group_name", "item_group_name")]:
         val = (data.get(field) or "").strip()
         if val and val not in lookups.get(key, []):
@@ -1083,6 +1104,10 @@ def normalize_supplier_payload(data: dict[str, Any]) -> dict[str, Any]:
     if status not in ("Current", "Prospect", "Inactive"):
         status = "Current"
     out["status"] = status
+    interest = (out.get("interest_level") or "").strip()
+    if interest not in config.INTEREST_LEVEL_VALUES:
+        interest = ""
+    out["interest_level"] = interest or None
     sc = (out.get("short_code") or "").strip().upper()
     out["short_code"] = sc or None
 

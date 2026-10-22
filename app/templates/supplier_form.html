@@ -2,7 +2,7 @@
 {% block title %}{% if mode == 'create' %}Create{% else %}Edit{% endif %} Supplier — Supplier Management{% endblock %}
 {% block content %}
 <div class="page-head">
-  <h1>{% if mode == 'create' %}Create Supplier{% else %}Edit Supplier {{ supplier.short_code or ('#' ~ supplier.id_supplier) }}{% endif %}</h1>
+  <h1>{% if mode == 'create' %}Create Supplier{% else %}Edit Supplier {{ supplier.short_code or supplier.factory_trading_name or '' }}{% endif %}</h1>
   {% if mode == 'edit' %}
   <a href="/suppliers/{{ supplier.id_supplier }}" class="btn btn-ghost">← View</a>
   {% else %}
@@ -29,7 +29,7 @@
   <ul class="plain">
     {% for d in duplicates %}
     <li>
-      <a href="/suppliers/{{ d.id_supplier }}">{{ d.short_code or ('#' ~ d.id_supplier) }} — {{ d.factory_trading_name }}</a>
+      <a href="/suppliers/{{ d.id_supplier }}">{% if d.short_code %}{{ d.short_code }} — {% endif %}{{ d.factory_trading_name }}</a>
       ({{ d.country }}, {{ d.email or 'no email' }}) — match: {{ d.match_reason }}
     </li>
     {% endfor %}
@@ -56,6 +56,14 @@
       <select class="input-lg" name="status" required>
         {% for st in status_values %}
         <option value="{{ st }}" {% if supplier.status == st %}selected{% endif %}>{{ st }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Interest level
+      <select class="input-lg" name="interest_level">
+        <option value="">—</option>
+        {% for v in interest_level_values %}
+        <option value="{{ v }}" {% if supplier.interest_level == v %}selected{% endif %}>{{ v }}</option>
         {% endfor %}
       </select>
     </label>

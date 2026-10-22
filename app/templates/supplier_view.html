@@ -19,6 +19,10 @@
     <span class="view-value"><span class="badge badge-{{ supplier.status|lower }}">{{ supplier.status }}</span></span>
   </div>
   <div class="view-row">
+    <span class="view-label">Interest level</span>
+    <span class="view-value">{% if supplier.interest_level %}<span class="badge badge-{{ supplier.interest_level|lower|replace(' ', '-') }}">{{ supplier.interest_level }}</span>{% else %}—{% endif %}</span>
+  </div>
+  <div class="view-row">
     <span class="view-label">Meet</span>
     <span class="view-value">{{ supplier.meet or '—' }}</span>
   </div>
@@ -110,10 +114,6 @@
     <div class="view-row">
       <span class="view-label">Last updated</span>
       <span class="view-value">{{ supplier.updated_at }} by {{ supplier.updated_by_name }}</span>
-    </div>
-    <div class="view-row">
-      <span class="view-label">Internal ID</span>
-      <span class="view-value">#{{ supplier.id_supplier }}</span>
     </div>
   </div>
 </section>

@@ -43,9 +43,9 @@ DEFAULT_VISIBLE_COLUMNS = [
 
 # All columns available in the column picker
 ALL_COLUMNS = [
-    ("id_supplier", "ID"),
     ("short_code", "Code"),
     ("status", "Status"),
+    ("interest_level", "Interest level"),
     ("meet", "Meet"),
     ("country", "Country"),
     ("cn_province", "CN Province"),
@@ -65,6 +65,9 @@ ALL_COLUMNS = [
 ]
 
 STATUS_VALUES = ["Current", "Prospect", "Inactive"]
+
+# Priority order: Must visit (top) → Interesting → In Case
+INTEREST_LEVEL_VALUES = ["Must visit", "Interesting", "In Case"]
 
 ATTACHMENT_TYPES = [
     ("factory_photo", "Factory photo"),

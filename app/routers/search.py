@@ -39,6 +39,7 @@ FILTER_LABELS = {
     "tel_whatsapp_wechat": "Tel / WhatsApp / WeChat",
     "notes": "Notes",
     "status": "Status",
+    "interest_level": "Interest level",
     "meet": "Meet",
     "country": "Country",
     "cn_province": "CN Province",
@@ -58,6 +59,7 @@ FILTER_KEYS = [
     "tel_whatsapp_wechat",
     "notes",
     "status",
+    "interest_level",
     "meet",
     "country",
     "cn_province",
@@ -87,6 +89,7 @@ FILTER_TO_COLUMN = {
     "tel_whatsapp_wechat": "tel_whatsapp_wechat",
     "notes": "notes",
     "status": "status",
+    "interest_level": "interest_level",
     "meet": "meet",
     "country": "country",
     "cn_province": "cn_province",
@@ -157,6 +160,7 @@ def search_page(request: Request):
             "results": results,
             "lookups": lookups,
             "status_values": config.STATUS_VALUES,
+            "interest_level_values": config.INTEREST_LEVEL_VALUES,
             "saved_searches": saved,
             "searched": bool(filters),
             "max_saved": config.MAX_SAVED_SEARCHES,
@@ -178,7 +182,7 @@ def export_search(request: Request):
     ws = wb.active
     ws.title = "Suppliers"
     headers = [
-        "ID", "Code", "Status", "Meet", "Country", "CN Province", "City",
+        "Code", "Status", "Interest level", "Meet", "Country", "CN Province", "City",
         "Factory / Trading Name", "Website", "Contact name", "Email",
         "Tel / WhatsApp / WeChat", "Nature of Product", "Item Group",
         "Production method", "Tag 1", "Tag 2", "Tag 3", "Tag 4", "Notes",
@@ -187,7 +191,7 @@ def export_search(request: Request):
     ws.append(headers)
     for s in results:
         ws.append([
-            s.get("id_supplier"), s.get("short_code"), s.get("status"), s.get("meet"),
+            s.get("short_code"), s.get("status"), s.get("interest_level"), s.get("meet"),
             s.get("country"), s.get("cn_province"), s.get("city"),
             s.get("factory_trading_name"), s.get("website"), s.get("contact_name"),
             s.get("email"), s.get("tel_whatsapp_wechat"), s.get("nature_of_product"),
