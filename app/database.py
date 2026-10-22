@@ -146,6 +146,9 @@ def init_db() -> None:
         _migrate_schema(conn)
         _seed_if_empty(conn)
         _sync_lookups_from_seed(conn)
+        # Drop orphan known_tags so Admin list matches live usage;
+        # create/edit suggestions already ignore known_tags entirely.
+        prune_unused_known_tags(conn)
 
 
 def _migrate_schema(conn: sqlite3.Connection) -> None:
@@ -360,7 +363,7 @@ def _seed_sample_suppliers(conn: sqlite3.Connection) -> None:
     free_tag_pool = [
         "cordless", "heavy duty", "OEM grade", "export pack", "CE certified",
         "galvanized", "battery powered", "quick ship", "custom mold", "after sales",
-        "lawn mower", "LED strip", "carbide tip", "PTO shaft", "inner tube 16",
+        "lawn mower", "LED strip", "carbide tip", "PTO shaft", "Inner tube",
         "workshop bench", "fencing mesh", "plastic housing", "forged head", "CNC part",
     ]
     first_names = [
@@ -830,22 +833,50 @@ def normalize_tag_key(tag: str) -> str:
     return re.sub(r"[^a-z0-9]", "", (tag or "").lower())
 
 
-def list_all_known_tag_labels(conn) -> list[str]:
-    """All distinct tags from known_tags + live supplier tag fields."""
+def list_live_free_tag_labels(conn) -> list[str]:
+    """Distinct Tag 2–4 values currently present on at least one supplier.
+
+    Used for create/edit autocomplete and similarity. Does NOT include
+    orphan known_tags or Grouping (tag_1). Admin merge still uses known_tags.
+    """
     rows = conn.execute(
         """
         SELECT DISTINCT tag FROM (
-            SELECT tag FROM known_tags
-            UNION SELECT tag_1 AS tag FROM suppliers WHERE tag_1 IS NOT NULL AND tag_1 != ''
-            UNION SELECT tag_2 FROM suppliers WHERE tag_2 IS NOT NULL AND tag_2 != ''
-            UNION SELECT tag_3 FROM suppliers WHERE tag_3 IS NOT NULL AND tag_3 != ''
-            UNION SELECT tag_4 FROM suppliers WHERE tag_4 IS NOT NULL AND tag_4 != ''
+            SELECT tag_2 AS tag FROM suppliers
+            WHERE tag_2 IS NOT NULL AND TRIM(tag_2) != ''
+            UNION
+            SELECT tag_3 FROM suppliers
+            WHERE tag_3 IS NOT NULL AND TRIM(tag_3) != ''
+            UNION
+            SELECT tag_4 FROM suppliers
+            WHERE tag_4 IS NOT NULL AND TRIM(tag_4) != ''
         )
-        WHERE tag IS NOT NULL AND tag != ''
+        WHERE tag IS NOT NULL AND TRIM(tag) != ''
         ORDER BY tag COLLATE NOCASE
         """
     ).fetchall()
     return [r["tag"] for r in rows]
+
+
+def list_all_known_tag_labels(conn) -> list[str]:
+    """Backward-compatible alias: live free tags only (not known_tags orphans)."""
+    return list_live_free_tag_labels(conn)
+
+
+def prune_unused_known_tags(conn) -> int:
+    """Remove known_tags entries that are not currently on any supplier Tag 2–4."""
+    cur = conn.execute(
+        """
+        DELETE FROM known_tags
+        WHERE NOT EXISTS (
+            SELECT 1 FROM suppliers s
+            WHERE (s.tag_2 IS NOT NULL AND TRIM(s.tag_2) != '' AND s.tag_2 = known_tags.tag COLLATE NOCASE)
+               OR (s.tag_3 IS NOT NULL AND TRIM(s.tag_3) != '' AND s.tag_3 = known_tags.tag COLLATE NOCASE)
+               OR (s.tag_4 IS NOT NULL AND TRIM(s.tag_4) != '' AND s.tag_4 = known_tags.tag COLLATE NOCASE)
+        )
+        """
+    )
+    return cur.rowcount
 
 
 def find_similar_tag_labels(conn, typed: str) -> list[str]:
@@ -864,7 +895,7 @@ def find_similar_tag_labels(conn, typed: str) -> list[str]:
         return []
 
     candidates: list[str] = []
-    for label in list_all_known_tag_labels(conn):
+    for label in list_live_free_tag_labels(conn):
         if label.lower() == typed_lower:
             continue  # exact (case-insensitive) — not a "similar" conflict
         other_key = normalize_tag_key(label)

@@ -11,7 +11,6 @@ from app import config
 from app.database import (
     db_session,
     find_duplicate_suppliers,
-    list_all_known_tag_labels,
     lookups_by_type,
     next_short_code,
     normalize_supplier_payload,

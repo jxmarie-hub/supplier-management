@@ -20,15 +20,18 @@ def tag_suggestions(request: Request, q: str = Query("", max_length=100)):
         return {"tags": []}
     like = f"%{q}%"
     with db_session() as conn:
+        # Live Tag 2–4 only — never orphan known_tags or Grouping (tag_1)
         rows = conn.execute(
             """
             SELECT DISTINCT tag FROM (
-                SELECT tag FROM known_tags
+                SELECT tag_2 AS tag FROM suppliers
+                WHERE tag_2 IS NOT NULL AND TRIM(tag_2) != ''
                 UNION
-                SELECT tag_1 AS tag FROM suppliers WHERE tag_1 IS NOT NULL AND tag_1 != ''
-                UNION SELECT tag_2 FROM suppliers WHERE tag_2 IS NOT NULL AND tag_2 != ''
-                UNION SELECT tag_3 FROM suppliers WHERE tag_3 IS NOT NULL AND tag_3 != ''
-                UNION SELECT tag_4 FROM suppliers WHERE tag_4 IS NOT NULL AND tag_4 != ''
+                SELECT tag_3 FROM suppliers
+                WHERE tag_3 IS NOT NULL AND TRIM(tag_3) != ''
+                UNION
+                SELECT tag_4 FROM suppliers
+                WHERE tag_4 IS NOT NULL AND TRIM(tag_4) != ''
             )
             WHERE tag LIKE ? COLLATE NOCASE
             ORDER BY tag COLLATE NOCASE
