@@ -71,10 +71,13 @@
     <span class="view-value">{{ supplier.production_method or '—' }}</span>
   </div>
   <div class="view-row">
+    <span class="view-label">Grouping</span>
+    <span class="view-value">{% if supplier.tag_1 %}<span class="badge">{{ supplier.tag_1 }}</span>{% else %}—{% endif %}</span>
+  </div>
+  <div class="view-row">
     <span class="view-label">Tags</span>
     <span class="view-value">
-      {% if supplier.tag_1 or supplier.tag_2 or supplier.tag_3 or supplier.tag_4 %}
-        {% if supplier.tag_1 %}<span class="badge">{{ supplier.tag_1 }}</span>{% endif %}
+      {% if supplier.tag_2 or supplier.tag_3 or supplier.tag_4 %}
         {% if supplier.tag_2 %}<span class="badge">{{ supplier.tag_2 }}</span>{% endif %}
         {% if supplier.tag_3 %}<span class="badge">{{ supplier.tag_3 }}</span>{% endif %}
         {% if supplier.tag_4 %}<span class="badge">{{ supplier.tag_4 }}</span>{% endif %}
@@ -92,10 +95,22 @@
   {% if attachments %}
   <ul class="att-list">
     {% for a in attachments %}
-    <li>
-      <a href="/attachments/{{ a.id }}/download">{{ a.filename }}</a>
-      <span class="badge">{{ attachment_types.get(a.attachment_type, a.attachment_type) }}</span>
-      <span class="muted">{{ (a.size_bytes / 1024)|round(1) }} KB · {{ a.uploaded_at }} · {{ a.uploaded_by_name }}</span>
+    <li class="att-card">
+      <div class="att-meta">
+        <strong>{{ a.filename }}</strong>
+        <span class="badge">{{ attachment_types.get(a.attachment_type, a.attachment_type) }}</span>
+        <span class="muted">{{ (a.size_bytes / 1024)|round(1) }} KB · {{ a.uploaded_at }} · {{ a.uploaded_by_name }}</span>
+        <a class="btn btn-ghost btn-sm" href="/attachments/{{ a.id }}/download">Download</a>
+      </div>
+      {% if a.is_image %}
+      <a href="/attachments/{{ a.id }}/preview" target="_blank" rel="noopener noreferrer">
+        <img class="att-preview-img" src="/attachments/{{ a.id }}/preview" alt="{{ a.filename }}">
+      </a>
+      {% elif a.is_pdf %}
+      <iframe class="att-preview-pdf" src="/attachments/{{ a.id }}/preview" title="{{ a.filename }}"></iframe>
+      {% else %}
+      <p class="muted">No in-browser preview for this file type — use Download.</p>
+      {% endif %}
     </li>
     {% endfor %}
   </ul>

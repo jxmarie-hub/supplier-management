@@ -11,6 +11,7 @@ from app import config
 from app.database import (
     db_session,
     find_duplicate_suppliers,
+    list_all_known_tag_labels,
     lookups_by_type,
     next_short_code,
     normalize_supplier_payload,
@@ -92,6 +93,32 @@ def _username_map(conn, *user_ids) -> dict[int, str]:
     return {r["id"]: r["username"] for r in rows}
 
 
+def _enrich_attachments(attachments: list[dict]) -> list[dict]:
+    """Mark previewable image / PDF attachments for templates."""
+    out = []
+    for a in attachments:
+        item = dict(a)
+        ct = (item.get("content_type") or "").lower()
+        name = (item.get("filename") or "").lower()
+        ext = Path(name).suffix
+        is_image = ct.startswith("image/") or ext in {".jpg", ".jpeg", ".png", ".gif", ".webp"}
+        is_pdf = ct == "application/pdf" or ext == ".pdf"
+        item["is_image"] = is_image
+        item["is_pdf"] = is_pdf
+        item["can_preview"] = is_image or is_pdf
+        out.append(item)
+    return out
+
+
+def _grouping_options(conn, current: str | None = None) -> list[str]:
+    """Temporary Grouping dropdown options from known tags until Jean sends a list."""
+    opts = list_all_known_tag_labels(conn)
+    cur = (current or "").strip()
+    if cur and cur not in opts:
+        opts = [cur] + opts
+    return opts
+
+
 def _form_context(
     mode: str,
     supplier: dict,
@@ -103,12 +130,13 @@ def _form_context(
     need_duplicate_confirm: bool = False,
     tag_issues: list | None = None,
     need_tag_confirm: bool = False,
+    grouping_options: list | None = None,
 ) -> dict:
     return {
         "mode": mode,
         "supplier": supplier,
         "lookups": lookups,
-        "attachments": attachments,
+        "attachments": _enrich_attachments(attachments),
         "errors": errors,
         "duplicates": duplicates,
         "status_values": config.STATUS_VALUES,
@@ -117,6 +145,7 @@ def _form_context(
         "need_duplicate_confirm": need_duplicate_confirm,
         "tag_issues": tag_issues or [],
         "need_tag_confirm": need_tag_confirm,
+        "grouping_options": grouping_options or [],
         "nav_active": "create" if mode == "create" else "home",
     }
 
@@ -186,6 +215,7 @@ def new_supplier_form(request: Request):
     with db_session() as conn:
         lookups = lookups_by_type(conn)
         suggested = next_short_code(conn)
+        grouping_options = _grouping_options(conn)
     blank = {f: "" for f in SUPPLIER_FIELDS}
     blank["country"] = config.DEFAULT_COUNTRY
     blank["status"] = "Current"
@@ -193,7 +223,7 @@ def new_supplier_form(request: Request):
     return render(
         request,
         "supplier_form.html",
-        _form_context("create", blank, lookups, [], [], []),
+        _form_context("create", blank, lookups, [], [], [], grouping_options=grouping_options),
     )
 
 
@@ -244,6 +274,7 @@ async def create_supplier(
 
     with db_session() as conn:
         lookups = lookups_by_type(conn)
+        grouping_options = _grouping_options(conn, payload.get("tag_1"))
         if not payload.get("short_code"):
             payload["short_code"] = next_short_code(conn)
         errors = validate_supplier_payload(payload, lookups)
@@ -262,6 +293,7 @@ async def create_supplier(
                 _form_context(
                     "create", payload, lookups, [], errors, [],
                     tag_issues=tag_issues, need_tag_confirm=True,
+                    grouping_options=grouping_options,
                 ),
                 status_code=409,
             )
@@ -277,6 +309,7 @@ async def create_supplier(
                 _form_context(
                     "create", payload, lookups, [], errors, duplicates,
                     need_duplicate_confirm=True,
+                    grouping_options=grouping_options,
                 ),
                 status_code=409,
             )
@@ -284,7 +317,7 @@ async def create_supplier(
             return render(
                 request,
                 "supplier_form.html",
-                _form_context("create", payload, lookups, [], errors, duplicates),
+                _form_context("create", payload, lookups, [], errors, duplicates, grouping_options=grouping_options),
                 status_code=400,
             )
         now = utc_now()
@@ -317,13 +350,15 @@ def view_supplier(request: Request, supplier_id: int):
             flash(request, "Supplier not found.", "error")
             return RedirectResponse(url="/", status_code=303)
         supplier = _enrich(dict(row))
-        attachments = [
-            dict(a)
-            for a in conn.execute(
-                "SELECT * FROM attachments WHERE supplier_id = ? ORDER BY uploaded_at",
-                (supplier_id,),
-            ).fetchall()
-        ]
+        attachments = _enrich_attachments(
+            [
+                dict(a)
+                for a in conn.execute(
+                    "SELECT * FROM attachments WHERE supplier_id = ? ORDER BY uploaded_at",
+                    (supplier_id,),
+                ).fetchall()
+            ]
+        )
         uploader_ids = [a.get("uploaded_by") for a in attachments]
         unames = _username_map(
             conn, supplier.get("created_by"), supplier.get("updated_by"), *uploader_ids
@@ -356,6 +391,8 @@ def edit_supplier_form(request: Request, supplier_id: int):
             flash(request, "Supplier not found.", "error")
             return RedirectResponse(url="/", status_code=303)
         lookups = lookups_by_type(conn)
+        supplier = dict(row)
+        grouping_options = _grouping_options(conn, supplier.get("tag_1"))
         attachments = [
             dict(a)
             for a in conn.execute(
@@ -366,7 +403,7 @@ def edit_supplier_form(request: Request, supplier_id: int):
     return render(
         request,
         "supplier_form.html",
-        _form_context("edit", dict(row), lookups, attachments, [], []),
+        _form_context("edit", supplier, lookups, attachments, [], [], grouping_options=grouping_options),
     )
 
 
@@ -424,6 +461,7 @@ async def update_supplier(
             flash(request, "Supplier not found.", "error")
             return RedirectResponse(url="/", status_code=303)
         lookups = lookups_by_type(conn)
+        grouping_options = _grouping_options(conn, payload.get("tag_1"))
         errors = validate_supplier_payload(payload, lookups)
         if payload.get("short_code"):
             clash = conn.execute(
@@ -449,6 +487,7 @@ async def update_supplier(
                 _form_context(
                     "edit", payload, lookups, attachments, errors, [],
                     tag_issues=tag_issues, need_tag_confirm=True,
+                    grouping_options=grouping_options,
                 ),
                 status_code=409,
             )
@@ -467,6 +506,7 @@ async def update_supplier(
                 _form_context(
                     "edit", payload, lookups, attachments, errors, duplicates,
                     need_duplicate_confirm=True,
+                    grouping_options=grouping_options,
                 ),
                 status_code=409,
             )
@@ -474,7 +514,7 @@ async def update_supplier(
             return render(
                 request,
                 "supplier_form.html",
-                _form_context("edit", payload, lookups, attachments, errors, duplicates),
+                _form_context("edit", payload, lookups, attachments, errors, duplicates, grouping_options=grouping_options),
                 status_code=400,
             )
         sets = ", ".join(f"{c} = ?" for c in SUPPLIER_FIELDS)
@@ -552,6 +592,30 @@ def download_attachment(request: Request, attachment_id: int):
         path,
         filename=row["filename"],
         media_type=row["content_type"] or "application/octet-stream",
+    )
+
+
+@router.get("/attachments/{attachment_id}/preview")
+def preview_attachment(request: Request, attachment_id: int):
+    """Inline preview for images and PDFs (Content-Disposition: inline)."""
+    user = current_user(request)
+    if not user:
+        return login_redirect()
+    with db_session() as conn:
+        row = conn.execute("SELECT * FROM attachments WHERE id = ?", (attachment_id,)).fetchone()
+    if not row:
+        flash(request, "Attachment not found.", "error")
+        return RedirectResponse(url="/", status_code=303)
+    path = config.UPLOAD_DIR / row["stored_path"]
+    if not path.is_file():
+        flash(request, "File missing on disk.", "error")
+        return RedirectResponse(url="/", status_code=303)
+    media = row["content_type"] or "application/octet-stream"
+    return FileResponse(
+        path,
+        media_type=media,
+        filename=row["filename"],
+        content_disposition_type="inline",
     )
 
 

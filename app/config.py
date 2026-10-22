@@ -58,7 +58,7 @@ ALL_COLUMNS = [
     ("nature_of_product", "Nature of Product"),
     ("item_group_name", "Item Group"),
     ("production_method", "Production method"),
-    ("tags", "Tags"),
+    ("tags", "Grouping / Tags"),
     ("notes", "Notes"),
     ("created_at", "Created"),
     ("updated_at", "Updated"),

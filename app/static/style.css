@@ -179,3 +179,18 @@ tr.clickable-row:hover { background: #f0fdf4; }
 .filter-summary-title { font-size: 1rem; margin: 0 0 0.5rem; }
 .filter-summary-list { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 0.35rem 1.25rem; }
 .filter-summary-list li { margin: 0; }
+
+
+/* Attachment previews */
+.att-card { display: grid; gap: 0.55rem; align-items: start; }
+.att-meta { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+.att-preview-img {
+  max-width: 100%; max-height: 360px; border-radius: 10px;
+  border: 1px solid var(--border); background: #f8fafc; display: block;
+}
+.att-preview-pdf {
+  width: 100%; min-height: 420px; height: 55vh; border: 1px solid var(--border);
+  border-radius: 10px; background: #f8fafc;
+}
+.fieldset-hint { margin: 0 0 0.25rem; grid-column: 1 / -1; font-weight: 500; }
+.req-hint { color: var(--warn); font-weight: 600; font-size: 0.85rem; }

@@ -104,14 +104,15 @@
 
   <fieldset>
     <legend>Contact</legend>
+    <p class="muted fieldset-hint">Email or Tel / WhatsApp / WeChat — at least one required.</p>
     <label>Contact name
       <input class="input-lg" name="contact_name" value="{{ supplier.contact_name or '' }}">
     </label>
     <label>Email
-      <input class="input-lg" type="email" name="email" value="{{ supplier.email or '' }}">
+      <input class="input-lg" type="email" name="email" id="field-email" value="{{ supplier.email or '' }}">
     </label>
     <label>Tel / WhatsApp / WeChat
-      <input class="input-lg" name="tel_whatsapp_wechat" value="{{ supplier.tel_whatsapp_wechat or '' }}">
+      <input class="input-lg" name="tel_whatsapp_wechat" id="field-tel" value="{{ supplier.tel_whatsapp_wechat or '' }}">
     </label>
     <label>Website
       <input class="input-lg" name="website" value="{{ supplier.website or '' }}">
@@ -128,15 +129,15 @@
         {% endfor %}
       </select>
     </label>
-    <label>Item Group
-      <select class="input-lg" name="item_group_name">
+    <label id="label-item-group">Item Group <span class="req-hint" id="hint-item-group" hidden>(required for Finish product)</span>
+      <select class="input-lg" name="item_group_name" id="field-item-group">
         <option value="">—</option>
         {% for v in lookups.item_group_name %}
         <option value="{{ v }}" {% if supplier.item_group_name == v %}selected{% endif %}>{{ v }}</option>
         {% endfor %}
       </select>
     </label>
-    <label>Production method
+    <label id="label-method">Production method <span class="req-hint" id="hint-method" hidden>(required for OEM)</span>
       <select class="input-lg" name="production_method" id="field-method">
         <option value="">—</option>
         {% for v in lookups.production_method %}
@@ -147,10 +148,20 @@
   </fieldset>
 
   <fieldset>
-    <legend>Tags</legend>
-    {% for i in range(1,5) %}
+    <legend>Grouping &amp; Tags</legend>
+    <p class="muted fieldset-hint">Grouping is mandatory. Also enter at least one free Tag (2–4). Temporary Grouping list = known tags until the final list is provided.</p>
+    <label>Grouping *
+      <select class="input-lg" name="tag_1" id="field-grouping" required>
+        <option value="">—</option>
+        {% for v in grouping_options %}
+        <option value="{{ v }}" {% if supplier.tag_1 == v %}selected{% endif %}>{{ v }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <input type="hidden" name="tag_resolve_1" id="tag-resolve-1" value="">
+    {% for i in range(2,5) %}
     {% set field = 'tag_' ~ i %}
-    <label>Tag {{ i }}
+    <label>Tag {{ i }}{% if i == 2 %} *{% endif %}
       <input class="input-lg tag-input" name="tag_{{ i }}" id="tag-input-{{ i }}"
              value="{{ supplier['tag_' ~ i] or '' }}" autocomplete="off" list="tag-suggestions-{{ i }}"
              data-tag-index="{{ i }}">
@@ -226,14 +237,26 @@
   <h2>Existing attachments</h2>
   <ul class="att-list">
     {% for a in attachments %}
-    <li>
-      <a href="/attachments/{{ a.id }}/download">{{ a.filename }}</a>
-      <span class="badge">{{ a.attachment_type }}</span>
-      <span class="muted">{{ (a.size_bytes / 1024)|round(1) }} KB</span>
-      <form method="post" action="/attachments/{{ a.id }}/delete" class="inline">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        <button type="submit" class="btn btn-ghost btn-sm" onclick="return confirm('Delete file?');">Remove</button>
-      </form>
+    <li class="att-card">
+      <div class="att-meta">
+        <strong>{{ a.filename }}</strong>
+        <span class="badge">{{ a.attachment_type }}</span>
+        <span class="muted">{{ (a.size_bytes / 1024)|round(1) }} KB</span>
+        <a class="btn btn-ghost btn-sm" href="/attachments/{{ a.id }}/download">Download</a>
+        <form method="post" action="/attachments/{{ a.id }}/delete" class="inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button type="submit" class="btn btn-ghost btn-sm" onclick="return confirm('Delete file?');">Remove</button>
+        </form>
+      </div>
+      {% if a.is_image %}
+      <a href="/attachments/{{ a.id }}/preview" target="_blank" rel="noopener noreferrer">
+        <img class="att-preview-img" src="/attachments/{{ a.id }}/preview" alt="{{ a.filename }}">
+      </a>
+      {% elif a.is_pdf %}
+      <iframe class="att-preview-pdf" src="/attachments/{{ a.id }}/preview" title="{{ a.filename }}"></iframe>
+      {% else %}
+      <p class="muted">No in-browser preview for this file type.</p>
+      {% endif %}
     </li>
     {% endfor %}
   </ul>
@@ -246,5 +269,6 @@
   initConditionalFields();
   initTagAutocomplete();
   initTagSimilarityCheck();
+  initSupplierFormValidation();
 </script>
 {% endblock %}

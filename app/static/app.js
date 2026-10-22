@@ -15,11 +15,27 @@ function initConditionalFields() {
     }
   }
 
+  const itemGroup = document.getElementById("field-item-group");
+  const hintItem = document.getElementById("hint-item-group");
+  const hintMethod = document.getElementById("hint-method");
+
   function syncNature() {
-    if (nature.value === "Finish product") {
+    const isFinish = nature.value === "Finish product";
+    const isOem = nature.value === "OEM";
+    if (isFinish) {
       method.value = "N/A";
-    } else if (nature.value === "OEM" && method.value === "N/A") {
+    } else if (isOem && method.value === "N/A") {
       method.value = "";
+    }
+    if (hintItem) hintItem.hidden = !isFinish;
+    if (hintMethod) hintMethod.hidden = !isOem;
+    if (itemGroup) {
+      if (isFinish) itemGroup.setAttribute("required", "required");
+      else itemGroup.removeAttribute("required");
+    }
+    if (method) {
+      if (isOem) method.setAttribute("required", "required");
+      else method.removeAttribute("required");
     }
   }
 
@@ -127,9 +143,62 @@ function initClickableRows() {
   });
 }
 
+
+function initSupplierFormValidation() {
+  const form = document.getElementById("supplier-form");
+  if (!form) return;
+  form.addEventListener("submit", (e) => {
+    const email = (form.querySelector("#field-email") || {}).value || "";
+    const tel = (form.querySelector("#field-tel") || {}).value || "";
+    if (!String(email).trim() && !String(tel).trim()) {
+      e.preventDefault();
+      alert("Enter an email or a Tel / WhatsApp / WeChat number (at least one is required).");
+      const focusEl = form.querySelector("#field-email") || form.querySelector("#field-tel");
+      if (focusEl) focusEl.focus();
+      return;
+    }
+    const grouping = (form.querySelector("#field-grouping") || {}).value || "";
+    if (!String(grouping).trim()) {
+      e.preventDefault();
+      alert("Grouping is required.");
+      const g = form.querySelector("#field-grouping");
+      if (g) g.focus();
+      return;
+    }
+    const t2 = (form.querySelector("#tag-input-2") || {}).value || "";
+    const t3 = (form.querySelector("#tag-input-3") || {}).value || "";
+    const t4 = (form.querySelector("#tag-input-4") || {}).value || "";
+    if (!String(t2).trim() && !String(t3).trim() && !String(t4).trim()) {
+      e.preventDefault();
+      alert("Enter at least one Tag (Tag 2, 3, or 4).");
+      const t = form.querySelector("#tag-input-2");
+      if (t) t.focus();
+      return;
+    }
+    const nature = (form.querySelector("#field-nature") || {}).value || "";
+    const itemGroup = (form.querySelector("#field-item-group") || {}).value || "";
+    const method = (form.querySelector("#field-method") || {}).value || "";
+    if (nature === "Finish product" && !String(itemGroup).trim()) {
+      e.preventDefault();
+      alert("Item Group is required when Nature of Product is Finish product.");
+      const ig = form.querySelector("#field-item-group");
+      if (ig) ig.focus();
+      return;
+    }
+    if (nature === "OEM" && (!String(method).trim() || method === "N/A")) {
+      e.preventDefault();
+      alert("Production Method is required when Nature of Product is OEM.");
+      const m = form.querySelector("#field-method");
+      if (m) m.focus();
+      return;
+    }
+  });
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   initConditionalFields();
   initTagAutocomplete();
   initTagSimilarityCheck();
   initClickableRows();
+  initSupplierFormValidation();
 });

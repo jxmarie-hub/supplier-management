@@ -224,8 +224,12 @@ def _seed_if_empty(conn: sqlite3.Connection) -> None:
             "SELECT COUNT(*) FROM suppliers WHERE interest_level IS NOT NULL AND TRIM(interest_level) != ''"
         ).fetchone()[0]
         missing_interest = supplier_count > 0 and interest_filled == 0
-        if supplier_count < demo_target or bad or missing_interest:
-            # Demo refresh: replace suppliers when seed grew, non-Asia rows remain, or interest unset.
+        missing_grouping = conn.execute(
+            "SELECT COUNT(*) FROM suppliers WHERE tag_1 IS NULL OR TRIM(tag_1) = ''"
+        ).fetchone()[0]
+        if supplier_count < demo_target or bad or missing_interest or missing_grouping:
+            # Demo refresh: replace suppliers when seed grew, non-Asia rows remain,
+            # interest unset, or Grouping (tag_1) missing under new rules.
             conn.execute("DELETE FROM attachments")
             conn.execute("DELETE FROM suppliers")
             conn.execute("DELETE FROM known_tags")
@@ -370,7 +374,7 @@ def _seed_sample_suppliers(conn: sqlite3.Connection) -> None:
             "item_group_name": "POWER TOOLS",
             "production_method": "N/A",
             "tag_1": "cordless drill",
-            "tag_2": None,
+            "tag_2": "power tools",
             "tag_3": None,
             "tag_4": None,
             "notes": "SE Asia finish-product option.",
@@ -430,7 +434,7 @@ def _seed_sample_suppliers(conn: sqlite3.Connection) -> None:
             "item_group_name": "HARDWARE",
             "production_method": "Forging",
             "tag_1": "forging",
-            "tag_2": None,
+            "tag_2": "hardware",
             "tag_3": None,
             "tag_4": None,
             "notes": "Inactive — quality issues 2025.",
@@ -470,7 +474,7 @@ def _seed_sample_suppliers(conn: sqlite3.Connection) -> None:
             "item_group_name": "POWER MACHINERY",
             "production_method": "N/A",
             "tag_1": "generator",
-            "tag_2": None,
+            "tag_2": "power machinery",
             "tag_3": None,
             "tag_4": None,
             "notes": "",
@@ -509,8 +513,8 @@ def _seed_sample_suppliers(conn: sqlite3.Connection) -> None:
             "nature_of_product": "Finish product",
             "item_group_name": "HAND TOOLS",
             "production_method": "N/A",
-            "tag_1": None,
-            "tag_2": None,
+            "tag_1": "hand tools",
+            "tag_2": "distribution",
             "tag_3": None,
             "tag_4": None,
             "notes": "EU distribution partner.",
@@ -550,7 +554,7 @@ def _seed_sample_suppliers(conn: sqlite3.Connection) -> None:
             "item_group_name": "HOUSEHOLD APPLIANCES",
             "production_method": "Injection plastique",
             "tag_1": "plastic housing",
-            "tag_2": None,
+            "tag_2": "injection",
             "tag_3": None,
             "tag_4": None,
             "notes": "Inactive after ownership change.",
@@ -610,7 +614,7 @@ def _seed_sample_suppliers(conn: sqlite3.Connection) -> None:
             "item_group_name": "INDUSTRIAL COMPONENT",
             "production_method": "Machining",
             "tag_1": "CNC",
-            "tag_2": None,
+            "tag_2": "machining",
             "tag_3": None,
             "tag_4": None,
             "notes": "Email only — EU machining.",
@@ -629,8 +633,8 @@ def _seed_sample_suppliers(conn: sqlite3.Connection) -> None:
             "nature_of_product": "Finish product",
             "item_group_name": "CORPORATE GIFTS",
             "production_method": "N/A",
-            "tag_1": None,
-            "tag_2": None,
+            "tag_1": "corporate gifts",
+            "tag_2": "promotional",
             "tag_3": None,
             "tag_4": None,
             "notes": "",
@@ -670,7 +674,7 @@ def _seed_sample_suppliers(conn: sqlite3.Connection) -> None:
             "item_group_name": "WORKSHOP EQUIPMENT",
             "production_method": "N/A",
             "tag_1": "bench vise",
-            "tag_2": None,
+            "tag_2": "workshop",
             "tag_3": None,
             "tag_4": None,
             "notes": "Phone only — prospect SE Asia.",
@@ -750,7 +754,7 @@ def _seed_sample_suppliers(conn: sqlite3.Connection) -> None:
             "item_group_name": "PACKING/PACKAGING",
             "production_method": "N/A",
             "tag_1": "carton",
-            "tag_2": None,
+            "tag_2": "packaging",
             "tag_3": None,
             "tag_4": None,
             "notes": "EU packaging partner.",
@@ -789,8 +793,8 @@ def _seed_sample_suppliers(conn: sqlite3.Connection) -> None:
             "nature_of_product": "Finish product",
             "item_group_name": "PET PRODUCTS",
             "production_method": "N/A",
-            "tag_1": None,
-            "tag_2": None,
+            "tag_1": "pet products",
+            "tag_2": "export",
             "tag_3": None,
             "tag_4": None,
             "notes": "Inactive — stopped exporting.",
@@ -1053,18 +1057,31 @@ def validate_supplier_payload(data: dict[str, Any], lookups: dict[str, list[str]
     elif country not in lookups.get("country", []):
         errors.append("Country must be chosen from the list.")
 
+    email = (data.get("email") or "").strip()
+    tel = (data.get("tel_whatsapp_wechat") or "").strip()
+    if not email and not tel:
+        errors.append("Enter an email or a Tel / WhatsApp / WeChat number (at least one is required).")
+
     nature = (data.get("nature_of_product") or "").strip()
     if nature and nature not in lookups.get("nature_of_product", []):
         errors.append("Nature of Product must be chosen from the list.")
 
     method = (data.get("production_method") or "").strip()
+    item_group = (data.get("item_group_name") or "").strip()
     cn_province = (data.get("cn_province") or "").strip()
 
+    # Exact seed values: "OEM" and "Finish product"
     if nature == "OEM":
         if not method or method == "N/A":
             errors.append("Production Method is required when Nature of Product is OEM.")
         elif method not in lookups.get("production_method", []):
             errors.append("Production Method must be chosen from the list.")
+
+    if nature == "Finish product":
+        if not item_group:
+            errors.append("Item Group is required when Nature of Product is Finish product.")
+        elif item_group not in lookups.get("item_group_name", []):
+            errors.append("Item Group must be chosen from the list.")
 
     if country == "China":
         if not cn_province:
@@ -1086,6 +1103,18 @@ def validate_supplier_payload(data: dict[str, Any], lookups: dict[str, list[str]
     interest = (data.get("interest_level") or "").strip()
     if interest and interest not in config.INTEREST_LEVEL_VALUES:
         errors.append("Interest level must be Must visit, Interesting, or In Case.")
+
+    grouping = (data.get("tag_1") or "").strip()
+    if not grouping:
+        errors.append("Grouping is required.")
+
+    free_tags = [
+        (data.get("tag_2") or "").strip(),
+        (data.get("tag_3") or "").strip(),
+        (data.get("tag_4") or "").strip(),
+    ]
+    if not any(free_tags):
+        errors.append("Enter at least one Tag (Tag 2, 3, or 4).")
 
     for field, key in [("meet", "meet"), ("item_group_name", "item_group_name")]:
         val = (data.get(field) or "").strip()
@@ -1288,6 +1317,10 @@ def resolve_tag_similarities(
         typed = (out.get(field) or "").strip()
         if not typed:
             out[field] = None
+            continue
+        # Grouping (tag_1) is a controlled dropdown — no fuzzy unify prompt
+        if i == 1:
+            out[field] = typed
             continue
         decision = (resolve_map.get(field) or "").strip()
         if decision.startswith("use:"):
