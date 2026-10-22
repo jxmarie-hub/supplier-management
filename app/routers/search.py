@@ -58,6 +58,41 @@ def _filters_from_request(request: Request) -> dict:
     return out
 
 
+
+FILTER_TO_COLUMN = {
+    "factory_trading_name": "factory_trading_name",
+    "contact_name": "contact_name",
+    "email": "email",
+    "city": "city",
+    "website": "website",
+    "tel_whatsapp_wechat": "tel_whatsapp_wechat",
+    "notes": "notes",
+    "status": "status",
+    "meet": "meet",
+    "country": "country",
+    "cn_province": "cn_province",
+    "nature_of_product": "nature_of_product",
+    "item_group_name": "item_group_name",
+    "production_method": "production_method",
+    "tag": "tags",
+}
+
+
+def _visible_columns_with_filters(user_columns: list[str], filters: dict) -> list[str]:
+    """Keep user column prefs, then append any columns used as active filters."""
+    allowed = {k for k, _ in config.ALL_COLUMNS}
+    out: list[str] = [c for c in user_columns if c in allowed]
+    seen = set(out)
+    for key, value in filters.items():
+        if not value:
+            continue
+        col = FILTER_TO_COLUMN.get(key)
+        if col and col in allowed and col not in seen:
+            out.append(col)
+            seen.add(col)
+    return out
+
+
 def _run_search(filters: dict) -> list[dict]:
     where, params = build_search_where(filters)
     with db_session() as conn:
@@ -88,7 +123,7 @@ def search_page(request: Request):
             except Exception:
                 d["filters"] = {}
             saved.append(d)
-    visible = load_visible_columns(user["id"])
+    visible = _visible_columns_with_filters(load_visible_columns(user["id"]), filters)
     return render(
         request,
         "search.html",
