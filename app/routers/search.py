@@ -29,6 +29,25 @@ from app.deps import (
 
 router = APIRouter(tags=["search"])
 
+FILTER_LABELS = {
+    "q": "Quick / wildcard",
+    "factory_trading_name": "Factory name",
+    "contact_name": "Contact",
+    "email": "Email",
+    "city": "City",
+    "website": "Website",
+    "tel_whatsapp_wechat": "Tel / WhatsApp / WeChat",
+    "notes": "Notes",
+    "status": "Status",
+    "meet": "Meet",
+    "country": "Country",
+    "cn_province": "CN Province",
+    "nature_of_product": "Nature of Product",
+    "item_group_name": "Item Group",
+    "production_method": "Production method",
+    "tag": "Tag",
+}
+
 FILTER_KEYS = [
     "q",
     "factory_trading_name",
@@ -124,11 +143,17 @@ def search_page(request: Request):
                 d["filters"] = {}
             saved.append(d)
     visible = _visible_columns_with_filters(load_visible_columns(user["id"]), filters)
+    active_filters = [
+        {"key": k, "label": FILTER_LABELS.get(k, k), "value": filters[k]}
+        for k in FILTER_KEYS
+        if filters.get(k)
+    ]
     return render(
         request,
         "search.html",
         {
             "filters": {k: filters.get(k, "") for k in FILTER_KEYS},
+            "active_filters": active_filters,
             "results": results,
             "lookups": lookups,
             "status_values": config.STATUS_VALUES,

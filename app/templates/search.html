@@ -118,6 +118,17 @@
   </div>
 </div>
 
+{% if active_filters %}
+<section class="card filter-summary">
+  <h2 class="filter-summary-title">Search criteria</h2>
+  <ul class="filter-summary-list">
+    {% for f in active_filters %}
+    <li><strong>{{ f.label }}:</strong> {{ f.value }}</li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
 {% if saved_searches|length < max_saved %}
 <section class="card">
   <form method="post" action="/search/favorites" class="search-inline">

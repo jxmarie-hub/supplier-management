@@ -171,3 +171,8 @@ tr.clickable-row:hover { background: #f0fdf4; }
   padding: 0.75rem; margin: 0.35rem 0 0.75rem; display: grid; gap: 0.4rem;
 }
 .row-actions { display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; }
+
+.filter-summary { margin-bottom: 1rem; }
+.filter-summary-title { font-size: 1rem; margin: 0 0 0.5rem; }
+.filter-summary-list { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 0.35rem 1.25rem; }
+.filter-summary-list li { margin: 0; }
