@@ -312,9 +312,37 @@ input:focus, select:focus, textarea:focus {
   font-size: 12px;
 }
 .btn:hover { text-decoration: none; background: #f8fafc; }
-.btn-primary { background: var(--primary); border-color: var(--primary); color: #fff; }
-.btn-primary:hover { background: var(--primary-hover); }
-.btn-danger { background: var(--danger); border-color: var(--danger); color: #fff; }
+/* Primary: force white label on teal (beats a / .row-actions a) */
+a.btn-primary,
+button.btn-primary,
+.btn-primary {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+a.btn-primary:visited,
+a.btn-primary:link {
+  color: #fff;
+}
+a.btn-primary:hover,
+button.btn-primary:hover,
+.btn-primary:hover {
+  background: var(--primary-hover);
+  border-color: var(--primary-hover);
+  color: #fff;
+  text-decoration: none;
+}
+a.btn-danger,
+button.btn-danger,
+.btn-danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+a.btn-danger:hover,
+.btn-danger:hover {
+  color: #fff;
+}
 .btn-ghost { background: transparent; border-color: transparent; color: inherit; }
 .btn-sm { min-height: 28px; padding: 3px 10px; font-size: 12px; }
 .btn-lg { min-height: 36px; padding: 7px 16px; font-size: 13px; width: auto; }
@@ -454,7 +482,8 @@ td.name, .row-main-link { font-weight: 600; }
 tr.clickable-row { cursor: pointer; }
 tr.clickable-row:hover { background: #f0fdfa; }
 .row-actions { display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; }
-.row-actions a { color: var(--primary); font-weight: 600; }
+.row-actions a:not(.btn) { color: var(--primary); font-weight: 600; }
+.row-actions a.btn-primary { color: #fff; }
 
 /* Detail read-only */
 .view-grid {
