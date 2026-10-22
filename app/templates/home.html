@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Home — Supplier Management{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Suppliers</h1>
+  <form method="get" action="/" class="search-inline">
+    <input type="search" name="q" value="{{ q }}" placeholder="Search (wildcards: LED* or *LED*)" class="input-lg">
+    <button type="submit" class="btn btn-primary">Search</button>
+    {% if q %}<a href="/" class="btn btn-ghost">Clear</a>{% endif %}
+  </form>
+</div>
+
+<details class="card columns-picker">
+  <summary>Show / hide columns</summary>
+  <form method="post" action="/columns" class="columns-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    {% for key, label in all_columns %}
+      <label class="check">
+        <input type="checkbox" name="columns" value="{{ key }}" {% if key in visible_columns %}checked{% endif %}>
+        {{ label }}
+      </label>
+    {% endfor %}
+    <button type="submit" class="btn btn-primary">Save columns</button>
+  </form>
+</details>
+
+<div class="table-wrap">
+  <table class="data-table">
+    <thead>
+      <tr>
+        {% for key in visible_columns %}
+          {% set next_dir = 'desc' if sort == key and dir == 'asc' else 'asc' %}
+          <th>
+            <a href="/?q={{ q|urlencode }}&sort={{ key }}&dir={{ next_dir }}">
+              {{ column_labels.get(key, key) }}{% if sort == key %} {% if dir == 'asc' %}↑{% else %}↓{% endif %}{% endif %}
+            </a>
+          </th>
+        {% endfor %}
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in suppliers %}
+      <tr class="clickable-row" data-href="/suppliers/{{ s.id_supplier }}" tabindex="0" role="link">
+        {% for key in visible_columns %}
+          <td>
+            {% if key == 'factory_trading_name' %}
+              <a class="row-main-link" href="/suppliers/{{ s.id_supplier }}">{{ s.factory_trading_name or '' }}</a>
+            {% elif key == 'status' %}
+              <span class="badge badge-{{ s.status|lower }}">{{ s.status }}</span>
+            {% elif key == 'notes' %}
+              {{ (s.notes or '')[:80] }}{% if s.notes and s.notes|length > 80 %}…{% endif %}
+            {% else %}
+              {{ s.get(key) or '' }}
+            {% endif %}
+          </td>
+        {% endfor %}
+        <td class="row-actions" onclick="event.stopPropagation()">
+          <a href="/suppliers/{{ s.id_supplier }}" class="btn btn-sm">View</a>
+          <a href="/suppliers/{{ s.id_supplier }}/edit" class="btn btn-sm btn-ghost">Edit</a>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="99" class="muted">No suppliers found.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<p class="muted">{{ suppliers|length }} supplier(s)</p>
+{% endblock %}
+{% block scripts %}
+<script>initClickableRows();</script>
+{% endblock %}

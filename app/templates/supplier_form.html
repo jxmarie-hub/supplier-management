@@ -1,0 +1,242 @@
+{% extends "base.html" %}
+{% block title %}{% if mode == 'create' %}Create{% else %}Edit{% endif %} Supplier — Supplier Management{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{% if mode == 'create' %}Create Supplier{% else %}Edit Supplier {{ supplier.short_code or ('#' ~ supplier.id_supplier) }}{% endif %}</h1>
+  {% if mode == 'edit' %}
+  <a href="/suppliers/{{ supplier.id_supplier }}" class="btn btn-ghost">← View</a>
+  {% else %}
+  <a href="/" class="btn btn-ghost">← Back</a>
+  {% endif %}
+</div>
+
+{% if errors %}
+<div class="flash flash-error">
+  <ul class="plain">{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+
+{% if tag_issues %}
+<div class="flash flash-warn" id="tag-unify-banner">
+  <strong>Similar tag(s) already exist — please choose before saving:</strong>
+  <p class="muted">Unify with the existing spelling so searches stay consistent (e.g. Lawnmower → Lawn mower).</p>
+</div>
+{% endif %}
+
+{% if duplicates %}
+<div class="flash flash-warn">
+  <strong>Possible duplicate(s) detected:</strong>
+  <ul class="plain">
+    {% for d in duplicates %}
+    <li>
+      <a href="/suppliers/{{ d.id_supplier }}">{{ d.short_code or ('#' ~ d.id_supplier) }} — {{ d.factory_trading_name }}</a>
+      ({{ d.country }}, {{ d.email or 'no email' }}) — match: {{ d.match_reason }}
+    </li>
+    {% endfor %}
+  </ul>
+  {% if need_duplicate_confirm %}
+  <p>Tick “Save anyway” below to confirm, or edit the fields.</p>
+  {% endif %}
+</div>
+{% endif %}
+
+<form method="post"
+      action="{% if mode == 'create' %}/suppliers/new{% else %}/suppliers/{{ supplier.id_supplier }}/edit{% endif %}"
+      enctype="multipart/form-data"
+      class="card form-grid mobile-form"
+      id="supplier-form">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+  <fieldset>
+    <legend>Identity</legend>
+    <label>Code (SUP-XXXX)
+      <input class="input-lg" name="short_code" value="{{ supplier.short_code or '' }}" placeholder="Auto if empty">
+    </label>
+    <label>Status *
+      <select class="input-lg" name="status" required>
+        {% for st in status_values %}
+        <option value="{{ st }}" {% if supplier.status == st %}selected{% endif %}>{{ st }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Factory / Trading Name *
+      <input class="input-lg" name="factory_trading_name" value="{{ supplier.factory_trading_name or '' }}" required>
+    </label>
+    <label>Meet
+      <select class="input-lg" name="meet">
+        <option value="">—</option>
+        {% for v in lookups.meet %}
+        <option value="{{ v }}" {% if supplier.meet == v %}selected{% endif %}>{{ v }}</option>
+        {% endfor %}
+      </select>
+    </label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Location</legend>
+    <label>Country *
+      <select class="input-lg" name="country" id="field-country" required>
+        {% for v in lookups.country %}
+        <option value="{{ v }}" {% if (supplier.country or 'China') == v %}selected{% endif %}>{{ v }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>CN Province
+      <select class="input-lg" name="cn_province" id="field-cn-province">
+        <option value="">—</option>
+        {% for v in lookups.cn_province %}
+        <option value="{{ v }}" {% if supplier.cn_province == v %}selected{% endif %}>{{ v }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>City
+      <input class="input-lg" name="city" value="{{ supplier.city or '' }}">
+    </label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Contact</legend>
+    <label>Contact name
+      <input class="input-lg" name="contact_name" value="{{ supplier.contact_name or '' }}">
+    </label>
+    <label>Email
+      <input class="input-lg" type="email" name="email" value="{{ supplier.email or '' }}">
+    </label>
+    <label>Tel / WhatsApp / WeChat
+      <input class="input-lg" name="tel_whatsapp_wechat" value="{{ supplier.tel_whatsapp_wechat or '' }}">
+    </label>
+    <label>Website
+      <input class="input-lg" name="website" value="{{ supplier.website or '' }}">
+    </label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Product</legend>
+    <label>Nature of Product
+      <select class="input-lg" name="nature_of_product" id="field-nature">
+        <option value="">—</option>
+        {% for v in lookups.nature_of_product %}
+        <option value="{{ v }}" {% if supplier.nature_of_product == v %}selected{% endif %}>{{ v }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Item Group
+      <select class="input-lg" name="item_group_name">
+        <option value="">—</option>
+        {% for v in lookups.item_group_name %}
+        <option value="{{ v }}" {% if supplier.item_group_name == v %}selected{% endif %}>{{ v }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Production method
+      <select class="input-lg" name="production_method" id="field-method">
+        <option value="">—</option>
+        {% for v in lookups.production_method %}
+        <option value="{{ v }}" {% if supplier.production_method == v %}selected{% endif %}>{{ v }}</option>
+        {% endfor %}
+      </select>
+    </label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Tags</legend>
+    {% for i in range(1,5) %}
+    {% set field = 'tag_' ~ i %}
+    <label>Tag {{ i }}
+      <input class="input-lg tag-input" name="tag_{{ i }}" id="tag-input-{{ i }}"
+             value="{{ supplier['tag_' ~ i] or '' }}" autocomplete="off" list="tag-suggestions-{{ i }}"
+             data-tag-index="{{ i }}">
+      <datalist id="tag-suggestions-{{ i }}"></datalist>
+    </label>
+    <input type="hidden" name="tag_resolve_{{ i }}" id="tag-resolve-{{ i }}" value=""
+           {% if need_tag_confirm %}{% for ti in tag_issues %}{% if ti.field == field %}required{% endif %}{% endfor %}{% endif %}>
+    <div class="tag-resolve" id="tag-resolve-box-{{ i }}">
+      {% for ti in tag_issues %}
+        {% if ti.field == field %}
+        <div class="tag-resolve-card">
+          <p><strong>Similar tag exists:</strong> you typed “{{ ti.typed }}”.</p>
+          {% for c in ti.candidates %}
+          <label class="check">
+            <input type="radio" name="tag_resolve_choice_{{ i }}" value="use:{{ c }}"
+                   onchange="document.getElementById('tag-resolve-{{ i }}').value=this.value; document.getElementById('tag-input-{{ i }}').value=this.value.slice(4);">
+            Use existing “{{ c }}”
+          </label>
+          {% endfor %}
+          <label class="check">
+            <input type="radio" name="tag_resolve_choice_{{ i }}" value="keep"
+                   onchange="document.getElementById('tag-resolve-{{ i }}').value='keep';">
+            Keep as typed “{{ ti.typed }}”
+          </label>
+        </div>
+        {% endif %}
+      {% endfor %}
+    </div>
+    {% endfor %}
+  </fieldset>
+
+  <fieldset>
+    <legend>Notes</legend>
+    <label>Notes (max {{ notes_max_len }})
+      <textarea class="input-lg" name="notes" maxlength="{{ notes_max_len }}" rows="3">{{ supplier.notes or '' }}</textarea>
+    </label>
+  </fieldset>
+
+  <fieldset class="upload-block">
+    <legend>Attachments (max {{ max_upload_mb }} MB each)</legend>
+    <label>Type for new uploads
+      <select class="input-lg" name="attachment_type">
+        {% for key, label in attachment_types %}
+        <option value="{{ key }}">{{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label class="file-drop">
+      <span>Photos / PDFs — tap to choose or take photo</span>
+      <input class="input-lg" type="file" name="files" multiple accept="image/*,.pdf,application/pdf" capture="environment">
+    </label>
+  </fieldset>
+
+  {% if need_duplicate_confirm %}
+  <label class="check warn-check">
+    <input type="checkbox" name="confirm_duplicate" value="1" required>
+    Save anyway (acknowledge possible duplicate)
+  </label>
+  {% endif %}
+
+  <div class="form-actions">
+    <button type="submit" class="btn btn-primary btn-lg">Save Supplier</button>
+    {% if mode == 'edit' %}
+    <button type="submit" formaction="/suppliers/{{ supplier.id_supplier }}/delete"
+            class="btn btn-danger btn-lg"
+            onclick="return confirm('Delete this supplier permanently?');">Delete</button>
+    {% endif %}
+  </div>
+</form>
+
+{% if mode == 'edit' and attachments %}
+<section class="card">
+  <h2>Existing attachments</h2>
+  <ul class="att-list">
+    {% for a in attachments %}
+    <li>
+      <a href="/attachments/{{ a.id }}/download">{{ a.filename }}</a>
+      <span class="badge">{{ a.attachment_type }}</span>
+      <span class="muted">{{ (a.size_bytes / 1024)|round(1) }} KB</span>
+      <form method="post" action="/attachments/{{ a.id }}/delete" class="inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button type="submit" class="btn btn-ghost btn-sm" onclick="return confirm('Delete file?');">Remove</button>
+      </form>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+  initConditionalFields();
+  initTagAutocomplete();
+  initTagSimilarityCheck();
+</script>
+{% endblock %}

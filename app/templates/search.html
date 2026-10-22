@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% block title %}{% if searched %}Search results{% else %}Advanced Search{% endif %} — Supplier Management{% endblock %}
+{% block content %}
+
+{% if not searched %}
+<div class="page-head">
+  <h1>Advanced Search</h1>
+</div>
+
+{% if saved_searches %}
+<section class="card">
+  <h2>Saved searches ({{ saved_searches|length }}/{{ max_saved }})</h2>
+  <ul class="fav-list">
+    {% for s in saved_searches %}
+    <li>
+      <a class="btn btn-sm" href="/search?{% for k,v in s.filters.items() %}{{ k }}={{ v|urlencode }}{% if not loop.last %}&{% endif %}{% endfor %}">{{ s.name }}</a>
+      <form method="post" action="/search/favorites/{{ s.id }}/delete" class="inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button type="submit" class="btn btn-ghost btn-sm">Delete</button>
+      </form>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+<form method="get" action="/search" class="card form-grid" id="search-form">
+  <label>Quick / wildcard
+    <input class="input-lg" name="q" value="{{ filters.q }}" placeholder="LED* or *LED*">
+  </label>
+  <label>Factory name
+    <input class="input-lg" name="factory_trading_name" value="{{ filters.factory_trading_name }}">
+  </label>
+  <label>Contact
+    <input class="input-lg" name="contact_name" value="{{ filters.contact_name }}">
+  </label>
+  <label>Email
+    <input class="input-lg" name="email" value="{{ filters.email }}">
+  </label>
+  <label>City
+    <input class="input-lg" name="city" value="{{ filters.city }}">
+  </label>
+  <label>Notes
+    <input class="input-lg" name="notes" value="{{ filters.notes }}">
+  </label>
+  <label>Status
+    <select class="input-lg" name="status">
+      <option value="">Any</option>
+      {% for st in status_values %}
+      <option value="{{ st }}" {% if filters.status == st %}selected{% endif %}>{{ st }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Country
+    <select class="input-lg" name="country">
+      <option value="">Any</option>
+      {% for v in lookups.country %}
+      <option value="{{ v }}" {% if filters.country == v %}selected{% endif %}>{{ v }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>CN Province
+    <select class="input-lg" name="cn_province">
+      <option value="">Any</option>
+      {% for v in lookups.cn_province %}
+      <option value="{{ v }}" {% if filters.cn_province == v %}selected{% endif %}>{{ v }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Meet
+    <select class="input-lg" name="meet">
+      <option value="">Any</option>
+      {% for v in lookups.meet %}
+      <option value="{{ v }}" {% if filters.meet == v %}selected{% endif %}>{{ v }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Nature of Product
+    <select class="input-lg" name="nature_of_product">
+      <option value="">Any</option>
+      {% for v in lookups.nature_of_product %}
+      <option value="{{ v }}" {% if filters.nature_of_product == v %}selected{% endif %}>{{ v }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Item Group
+    <select class="input-lg" name="item_group_name">
+      <option value="">Any</option>
+      {% for v in lookups.item_group_name %}
+      <option value="{{ v }}" {% if filters.item_group_name == v %}selected{% endif %}>{{ v }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Production method
+    <select class="input-lg" name="production_method">
+      <option value="">Any</option>
+      {% for v in lookups.production_method %}
+      <option value="{{ v }}" {% if filters.production_method == v %}selected{% endif %}>{{ v }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Tag (any of 4 fields)
+    <input class="input-lg" name="tag" value="{{ filters.tag }}" placeholder="*LED*">
+  </label>
+  <div class="form-actions">
+    <button type="submit" class="btn btn-primary btn-lg">Search</button>
+    <a class="btn btn-ghost" href="/search">Reset</a>
+  </div>
+</form>
+
+{% else %}
+{# Results-only view #}
+<div class="page-head">
+  <h1>{{ results|length }} result(s)</h1>
+  <div class="row-actions">
+    <a class="btn btn-primary" href="/search">New search</a>
+    <a class="btn" href="/search/export?{{ request.query_string.decode() }}">Export Excel</a>
+  </div>
+</div>
+
+{% if saved_searches|length < max_saved %}
+<section class="card">
+  <form method="post" action="/search/favorites" class="search-inline">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="filters_json" id="filters-json" value="">
+    <input class="input-lg" name="name" placeholder="Save this search as favorite…" required maxlength="80">
+    <button type="submit" class="btn btn-primary" onclick="document.getElementById('filters-json').value=JSON.stringify(Object.fromEntries(new URLSearchParams(window.location.search)))">Save favorite</button>
+  </form>
+</section>
+{% endif %}
+
+<section class="card">
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Code</th><th>Factory</th><th>Status</th><th>Country</th><th>Nature</th><th>Tags</th><th>Email</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in results %}
+        <tr class="clickable-row" data-href="/suppliers/{{ s.id_supplier }}" tabindex="0" role="link">
+          <td>{{ s.short_code }}</td>
+          <td><a class="row-main-link" href="/suppliers/{{ s.id_supplier }}">{{ s.factory_trading_name }}</a></td>
+          <td><span class="badge badge-{{ s.status|lower }}">{{ s.status }}</span></td>
+          <td>{{ s.country }}</td>
+          <td>{{ s.nature_of_product }}</td>
+          <td>{{ s.tags }}</td>
+          <td>{{ s.email }}</td>
+          <td class="row-actions" onclick="event.stopPropagation()">
+            <a href="/suppliers/{{ s.id_supplier }}" class="btn btn-sm">View</a>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" class="muted">No matches.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+{% endblock %}
+{% block scripts %}
+<script>initClickableRows();</script>
+{% endblock %}

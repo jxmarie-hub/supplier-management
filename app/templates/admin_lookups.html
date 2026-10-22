@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Lists — Admin{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Dropdown lists</h1>
+  <nav class="subnav">
+    <a href="/admin/users">Users</a>
+    <a href="/admin/lookups">Lists</a>
+    <a href="/admin/tags">Tags</a>
+  </nav>
+</div>
+
+<div class="tabs">
+  {% for t in lookup_types %}
+  <a class="btn btn-sm {% if t == lookup_type %}btn-primary{% endif %}" href="/admin/lookups?type={{ t }}">{{ lookup_labels[t] }}</a>
+  {% endfor %}
+</div>
+
+<form method="post" action="/admin/lookups" class="card form-grid">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <input type="hidden" name="lookup_type" value="{{ lookup_type }}">
+  <h2>Add to {{ lookup_labels[lookup_type] }}</h2>
+  <label>Value
+    <input class="input-lg" name="value" required>
+  </label>
+  <button type="submit" class="btn btn-primary">Add</button>
+</form>
+
+<div class="table-wrap card">
+  <table class="data-table">
+    <thead><tr><th>Value</th><th>Active</th><th></th></tr></thead>
+    <tbody>
+      {% for v in values %}
+      <tr>
+        <td>{{ v.value }}</td>
+        <td>{{ "Yes" if v.is_active else "No" }}</td>
+        <td>
+          <form method="post" action="/admin/lookups/{{ v.id }}/toggle" class="inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="lookup_type" value="{{ lookup_type }}">
+            <button class="btn btn-sm">{{ "Disable" if v.is_active else "Enable" }}</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

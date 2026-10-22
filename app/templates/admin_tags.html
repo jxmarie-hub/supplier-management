@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Tags — Admin{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Known tags</h1>
+  <nav class="subnav">
+    <a href="/admin/users">Users</a>
+    <a href="/admin/lookups">Lists</a>
+    <a href="/admin/tags">Tags</a>
+  </nav>
+</div>
+
+<form method="post" action="/admin/tags/merge" class="card form-grid">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <h2>Merge duplicate tags</h2>
+  <p class="muted">Renames source tag to target across all suppliers and the known-tags list.</p>
+  <label>Source tag (to remove)
+    <input class="input-lg" name="source_tag" list="all-tags" required>
+  </label>
+  <label>Target tag (keep)
+    <input class="input-lg" name="target_tag" list="all-tags" required>
+  </label>
+  <datalist id="all-tags">
+    {% for t in tags %}<option value="{{ t.tag }}">{% endfor %}
+  </datalist>
+  <button type="submit" class="btn btn-primary" onclick="return confirm('Merge tags?');">Merge</button>
+</form>
+
+<div class="table-wrap card">
+  <table class="data-table">
+    <thead><tr><th>Tag</th><th>Added</th></tr></thead>
+    <tbody>
+      {% for t in tags %}
+      <tr><td>{{ t.tag }}</td><td>{{ t.created_at }}</td></tr>
+      {% else %}
+      <tr><td colspan="2" class="muted">No tags yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

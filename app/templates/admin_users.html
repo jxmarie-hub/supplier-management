@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Users — Admin{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Users</h1>
+  <nav class="subnav">
+    <a href="/admin/users">Users</a>
+    <a href="/admin/lookups">Lists</a>
+    <a href="/admin/tags">Tags</a>
+  </nav>
+</div>
+
+<form method="post" action="/admin/users" class="card form-grid">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <h2>Create user</h2>
+  <label>Username
+    <input class="input-lg" name="username" required>
+  </label>
+  <label>Password (min 6)
+    <input class="input-lg" type="password" name="password" required minlength="6">
+  </label>
+  <label>Role
+    <select class="input-lg" name="role">
+      <option value="standard">Standard</option>
+      <option value="admin">Admin</option>
+    </select>
+  </label>
+  <button type="submit" class="btn btn-primary">Create</button>
+</form>
+
+<div class="table-wrap card">
+  <table class="data-table">
+    <thead><tr><th>Username</th><th>Role</th><th>Active</th><th>Created</th><th></th></tr></thead>
+    <tbody>
+      {% for u in users %}
+      <tr>
+        <td>{{ u.username }}</td>
+        <td>{{ u.role }}</td>
+        <td>{{ "Yes" if u.is_active else "No" }}</td>
+        <td>{{ u.created_at }}</td>
+        <td>
+          {% if u.id != user.id %}
+          <form method="post" action="/admin/users/{{ u.id }}/toggle" class="inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button class="btn btn-sm">{{ "Deactivate" if u.is_active else "Activate" }}</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
