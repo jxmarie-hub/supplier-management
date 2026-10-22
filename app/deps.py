@@ -14,6 +14,20 @@ from app.database import db_session, get_user_columns
 templates = Jinja2Templates(directory=str(config.BASE_DIR / "templates"))
 
 
+def website_href(url: Optional[str]) -> str:
+    """Return an absolute http(s) URL for href; empty string if blank."""
+    value = (url or "").strip()
+    if not value:
+        return ""
+    lower = value.lower()
+    if lower.startswith(("http://", "https://")):
+        return value
+    return "https://" + value
+
+
+templates.env.filters["website_href"] = website_href
+
+
 def get_csrf_token(request: Request) -> str:
     token = request.session.get("csrf_token")
     if not token:

@@ -184,6 +184,8 @@
               <span class="badge badge-{{ s.status|lower }}">{{ s.status }}</span>
             {% elif key == 'interest_level' and s.interest_level %}
               <span class="badge badge-{{ s.interest_level|lower|replace(' ', '-') }}">{{ s.interest_level }}</span>
+            {% elif key == 'website' and s.website %}
+              <a href="{{ s.website|website_href }}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">{{ s.website }}</a>
             {% elif key == 'tags' %}
               {{ s.tags or '' }}
             {% elif key == 'notes' %}

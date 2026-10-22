@@ -44,7 +44,7 @@
   </div>
   <div class="view-row">
     <span class="view-label">Website</span>
-    <span class="view-value">{% if supplier.website %}<a href="{{ supplier.website }}" target="_blank" rel="noopener">{{ supplier.website }}</a>{% else %}—{% endif %}</span>
+    <span class="view-value">{% if supplier.website %}<a href="{{ supplier.website|website_href }}" target="_blank" rel="noopener noreferrer">{{ supplier.website }}</a>{% else %}—{% endif %}</span>
   </div>
   <div class="view-row">
     <span class="view-label">Contact name</span>
