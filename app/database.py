@@ -580,6 +580,11 @@ def build_search_where(filters: dict[str, Any]) -> tuple[str, list[Any]]:
             clauses.append(f"LOWER({field}) = LOWER(?)")
             params.append(val)
 
+    grouping = (filters.get("grouping") or "").strip()
+    if grouping:
+        clauses.append("LOWER(tag_1) = LOWER(?)")
+        params.append(grouping)
+
     tag = (filters.get("tag") or "").strip()
     if tag:
         like = wildcard_to_like(tag)

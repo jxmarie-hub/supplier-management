@@ -1,97 +1,105 @@
 {% extends "base.html" %}
-{% block title %}{{ supplier.factory_trading_name }} — Supplier Management{% endblock %}
+{% block title %}{{ supplier.factory_trading_name }} — Supplier ERP{% endblock %}
 {% block content %}
-<div class="page-head">
-  <h1>{{ supplier.factory_trading_name }}</h1>
+<div class="toolbar">
+  <div>
+    <h1>{{ supplier.factory_trading_name }}{% if supplier.short_code %} · {{ supplier.short_code }}{% endif %}</h1>
+    <p class="sub" style="margin:0">
+      <span class="badge badge-{{ supplier.status|lower }}">{{ supplier.status }}</span>
+      {% if supplier.interest_level %}
+      · <span class="badge badge-{{ supplier.interest_level|lower|replace(' ', '-') }}">{{ supplier.interest_level }}</span>
+      {% endif %}
+    </p>
+  </div>
   <div class="row-actions">
-    <a href="/suppliers/{{ supplier.id_supplier }}/edit" class="btn btn-primary">Edit</a>
-    <a href="/" class="btn btn-ghost">← Home</a>
-  </div>
-</div>
-
-<div class="card view-grid">
-  <div class="view-row">
-    <span class="view-label">Code</span>
-    <span class="view-value">{{ supplier.short_code or '—' }}</span>
-  </div>
-  <div class="view-row">
-    <span class="view-label">Status</span>
-    <span class="view-value"><span class="badge badge-{{ supplier.status|lower }}">{{ supplier.status }}</span></span>
-  </div>
-  <div class="view-row">
-    <span class="view-label">Interest level</span>
-    <span class="view-value">{% if supplier.interest_level %}<span class="badge badge-{{ supplier.interest_level|lower|replace(' ', '-') }}">{{ supplier.interest_level }}</span>{% else %}—{% endif %}</span>
-  </div>
-  <div class="view-row">
-    <span class="view-label">Meet</span>
-    <span class="view-value">{{ supplier.meet or '—' }}</span>
-  </div>
-  <div class="view-row">
-    <span class="view-label">Country</span>
-    <span class="view-value">{{ supplier.country or '—' }}</span>
-  </div>
-  <div class="view-row">
-    <span class="view-label">CN Province</span>
-    <span class="view-value">{{ supplier.cn_province or '—' }}</span>
-  </div>
-  <div class="view-row">
-    <span class="view-label">City</span>
-    <span class="view-value">{{ supplier.city or '—' }}</span>
-  </div>
-  <div class="view-row">
-    <span class="view-label">Factory / Trading Name</span>
-    <span class="view-value">{{ supplier.factory_trading_name }}</span>
-  </div>
-  <div class="view-row">
-    <span class="view-label">Website</span>
-    <span class="view-value">{% if supplier.website %}<a href="{{ supplier.website|website_href }}" target="_blank" rel="noopener noreferrer">{{ supplier.website }}</a>{% else %}—{% endif %}</span>
-  </div>
-  <div class="view-row">
-    <span class="view-label">Contact name</span>
-    <span class="view-value">{{ supplier.contact_name or '—' }}</span>
-  </div>
-  <div class="view-row">
-    <span class="view-label">Email</span>
-    <span class="view-value">{% if supplier.email %}<a href="mailto:{{ supplier.email }}">{{ supplier.email }}</a>{% else %}—{% endif %}</span>
-  </div>
-  <div class="view-row">
-    <span class="view-label">Tel / WhatsApp / WeChat</span>
-    <span class="view-value">{{ supplier.tel_whatsapp_wechat or '—' }}</span>
-  </div>
-  <div class="view-row">
-    <span class="view-label">Nature of Product</span>
-    <span class="view-value">{{ supplier.nature_of_product or '—' }}</span>
-  </div>
-  <div class="view-row">
-    <span class="view-label">Item Group</span>
-    <span class="view-value">{{ supplier.item_group_name or '—' }}</span>
-  </div>
-  <div class="view-row">
-    <span class="view-label">Production method</span>
-    <span class="view-value">{{ supplier.production_method or '—' }}</span>
-  </div>
-  <div class="view-row">
-    <span class="view-label">Grouping</span>
-    <span class="view-value">{% if supplier.tag_1 %}<span class="badge">{{ supplier.tag_1 }}</span>{% else %}—{% endif %}</span>
-  </div>
-  <div class="view-row">
-    <span class="view-label">Tags</span>
-    <span class="view-value">
-      {% if supplier.tag_2 or supplier.tag_3 or supplier.tag_4 %}
-        {% if supplier.tag_2 %}<span class="badge">{{ supplier.tag_2 }}</span>{% endif %}
-        {% if supplier.tag_3 %}<span class="badge">{{ supplier.tag_3 }}</span>{% endif %}
-        {% if supplier.tag_4 %}<span class="badge">{{ supplier.tag_4 }}</span>{% endif %}
-      {% else %}—{% endif %}
-    </span>
-  </div>
-  <div class="view-row">
-    <span class="view-label">Notes</span>
-    <span class="view-value">{{ supplier.notes or '—' }}</span>
+    <a href="/suppliers/{{ supplier.id_supplier }}/edit" class="btn">Edit</a>
+    <a href="/" class="btn btn-primary">Close</a>
   </div>
 </div>
 
 <section class="card">
-  <h2>Attachments</h2>
+  <h2>Master data</h2>
+  <div class="view-grid">
+    <div class="view-row">
+      <span class="view-label">Code</span>
+      <span class="view-value">{{ supplier.short_code or '—' }}</span>
+    </div>
+    <div class="view-row">
+      <span class="view-label">Status</span>
+      <span class="view-value"><span class="badge badge-{{ supplier.status|lower }}">{{ supplier.status }}</span></span>
+    </div>
+    <div class="view-row">
+      <span class="view-label">Interest</span>
+      <span class="view-value">{% if supplier.interest_level %}<span class="badge badge-{{ supplier.interest_level|lower|replace(' ', '-') }}">{{ supplier.interest_level }}</span>{% else %}—{% endif %}</span>
+    </div>
+    <div class="view-row">
+      <span class="view-label">Meet</span>
+      <span class="view-value">{{ supplier.meet or '—' }}</span>
+    </div>
+    <div class="view-row">
+      <span class="view-label">Country</span>
+      <span class="view-value">{{ supplier.country or '—' }}</span>
+    </div>
+    <div class="view-row">
+      <span class="view-label">CN Province</span>
+      <span class="view-value">{{ supplier.cn_province or '—' }}</span>
+    </div>
+    <div class="view-row">
+      <span class="view-label">City</span>
+      <span class="view-value">{{ supplier.city or '—' }}</span>
+    </div>
+    <div class="view-row">
+      <span class="view-label">Factory / Trading Name</span>
+      <span class="view-value">{{ supplier.factory_trading_name }}</span>
+    </div>
+    <div class="view-row">
+      <span class="view-label">Contact</span>
+      <span class="view-value">{{ supplier.contact_name or '—' }}</span>
+    </div>
+    <div class="view-row">
+      <span class="view-label">Email</span>
+      <span class="view-value">{% if supplier.email %}<a href="mailto:{{ supplier.email }}">{{ supplier.email }}</a>{% else %}—{% endif %}</span>
+    </div>
+    <div class="view-row">
+      <span class="view-label">Tel / WeChat</span>
+      <span class="view-value">{{ supplier.tel_whatsapp_wechat or '—' }}</span>
+    </div>
+    <div class="view-row">
+      <span class="view-label">Website</span>
+      <span class="view-value">{% if supplier.website %}<a href="{{ supplier.website|website_href }}" target="_blank" rel="noopener noreferrer">{{ supplier.website }}</a>{% else %}—{% endif %}</span>
+    </div>
+    <div class="view-row">
+      <span class="view-label">Nature</span>
+      <span class="view-value">{{ supplier.nature_of_product or '—' }}</span>
+    </div>
+    <div class="view-row">
+      <span class="view-label">Item Group</span>
+      <span class="view-value">{{ supplier.item_group_name or '—' }}</span>
+    </div>
+    <div class="view-row">
+      <span class="view-label">Production method</span>
+      <span class="view-value">{{ supplier.production_method or '—' }}</span>
+    </div>
+    <div class="view-row">
+      <span class="view-label">Grouping</span>
+      <span class="view-value">{% if supplier.tag_1 %}<span class="badge">{{ supplier.tag_1 }}</span>{% else %}—{% endif %}</span>
+    </div>
+    <div class="view-row">
+      <span class="view-label">Tag 2 / 3 / 4</span>
+      <span class="view-value">
+        {{ supplier.tag_2 or '—' }} · {{ supplier.tag_3 or '—' }} · {{ supplier.tag_4 or '—' }}
+      </span>
+    </div>
+    <div class="view-row" style="grid-column:1/-1">
+      <span class="view-label">Notes</span>
+      <span class="view-value">{{ supplier.notes or '—' }}</span>
+    </div>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Attachments (preview)</h2>
+  <div class="card-body">
   {% if attachments %}
   <ul class="att-list">
     {% for a in attachments %}
@@ -117,6 +125,7 @@
   {% else %}
   <p class="muted">No attachments.</p>
   {% endif %}
+  </div>
 </section>
 
 <section class="card">

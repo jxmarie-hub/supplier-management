@@ -13,6 +13,7 @@ from app import config
 from app.database import (
     build_search_where,
     db_session,
+    get_grouping_options,
     lookups_by_type,
     supplier_tags_display,
     utc_now,
@@ -46,6 +47,7 @@ FILTER_LABELS = {
     "nature_of_product": "Nature of Product",
     "item_group_name": "Item Group",
     "production_method": "Production method",
+    "grouping": "Grouping",
     "tag": "Tag",
 }
 
@@ -66,6 +68,7 @@ FILTER_KEYS = [
     "nature_of_product",
     "item_group_name",
     "production_method",
+    "grouping",
     "tag",
 ]
 
@@ -96,6 +99,7 @@ FILTER_TO_COLUMN = {
     "nature_of_product": "nature_of_product",
     "item_group_name": "item_group_name",
     "production_method": "production_method",
+    "grouping": "tag_1",
     "tag": "tags",
 }
 
@@ -161,11 +165,13 @@ def search_page(request: Request):
             "lookups": lookups,
             "status_values": config.STATUS_VALUES,
             "interest_level_values": config.INTEREST_LEVEL_VALUES,
+            "grouping_options": get_grouping_options(),
             "saved_searches": saved,
             "searched": bool(filters),
             "max_saved": config.MAX_SAVED_SEARCHES,
             "visible_columns": visible,
             "column_labels": dict(config.ALL_COLUMNS),
+            "all_columns": config.ALL_COLUMNS,
             "nav_active": "search",
         },
     )
@@ -185,7 +191,7 @@ def export_search(request: Request):
         "Code", "Status", "Interest level", "Meet", "Country", "CN Province", "City",
         "Factory / Trading Name", "Website", "Contact name", "Email",
         "Tel / WhatsApp / WeChat", "Nature of Product", "Item Group",
-        "Production method", "Tag 1", "Tag 2", "Tag 3", "Tag 4", "Notes",
+        "Production method", "Grouping", "Tag 2", "Tag 3", "Tag 4", "Notes",
         "Created", "Updated",
     ]
     ws.append(headers)

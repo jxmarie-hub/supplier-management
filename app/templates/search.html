@@ -1,15 +1,17 @@
 {% extends "base.html" %}
-{% block title %}{% if searched %}Search results{% else %}Advanced Search{% endif %} — Supplier Management{% endblock %}
+{% block title %}{% if searched %}Search results{% else %}Search{% endif %} — Supplier ERP{% endblock %}
+{% block container_class %} wide{% endblock %}
 {% block content %}
 
 {% if not searched %}
 <div class="page-head">
-  <h1>Advanced Search</h1>
+  <h1>Search</h1>
 </div>
 
 {% if saved_searches %}
 <section class="card">
   <h2>Saved searches ({{ saved_searches|length }}/{{ max_saved }})</h2>
+  <div class="card-body">
   <ul class="fav-list">
     {% for s in saved_searches %}
     <li>
@@ -21,105 +23,157 @@
     </li>
     {% endfor %}
   </ul>
+  </div>
 </section>
 {% endif %}
 
-<form method="get" action="/search" class="card form-grid" id="search-form">
-  <label>Quick / wildcard
-    <input class="input-lg" name="q" value="{{ filters.q }}" placeholder="LED* or *LED*">
-  </label>
-  <label>Factory name
-    <input class="input-lg" name="factory_trading_name" value="{{ filters.factory_trading_name }}">
-  </label>
-  <label>Contact
-    <input class="input-lg" name="contact_name" value="{{ filters.contact_name }}">
-  </label>
-  <label>Email
-    <input class="input-lg" name="email" value="{{ filters.email }}">
-  </label>
-  <label>City
-    <input class="input-lg" name="city" value="{{ filters.city }}">
-  </label>
-  <label>Notes
-    <input class="input-lg" name="notes" value="{{ filters.notes }}">
-  </label>
-  <label>Status
-    <select class="input-lg" name="status">
-      <option value="">Any</option>
-      {% for st in status_values %}
-      <option value="{{ st }}" {% if filters.status == st %}selected{% endif %}>{{ st }}</option>
-      {% endfor %}
-    </select>
-  </label>
-  <label>Interest level
-    <select class="input-lg" name="interest_level">
-      <option value="">Any</option>
-      {% for v in interest_level_values %}
-      <option value="{{ v }}" {% if filters.interest_level == v %}selected{% endif %}>{{ v }}</option>
-      {% endfor %}
-    </select>
-  </label>
-  <label>Country
-    <select class="input-lg" name="country">
-      <option value="">Any</option>
-      {% for v in lookups.country %}
-      <option value="{{ v }}" {% if filters.country == v %}selected{% endif %}>{{ v }}</option>
-      {% endfor %}
-    </select>
-  </label>
-  <label>CN Province
-    <select class="input-lg" name="cn_province">
-      <option value="">Any</option>
-      {% for v in lookups.cn_province %}
-      <option value="{{ v }}" {% if filters.cn_province == v %}selected{% endif %}>{{ v }}</option>
-      {% endfor %}
-    </select>
-  </label>
-  <label>Meet
-    <select class="input-lg" name="meet">
-      <option value="">Any</option>
-      {% for v in lookups.meet %}
-      <option value="{{ v }}" {% if filters.meet == v %}selected{% endif %}>{{ v }}</option>
-      {% endfor %}
-    </select>
-  </label>
-  <label>Nature of Product
-    <select class="input-lg" name="nature_of_product">
-      <option value="">Any</option>
-      {% for v in lookups.nature_of_product %}
-      <option value="{{ v }}" {% if filters.nature_of_product == v %}selected{% endif %}>{{ v }}</option>
-      {% endfor %}
-    </select>
-  </label>
-  <label>Item Group
-    <select class="input-lg" name="item_group_name">
-      <option value="">Any</option>
-      {% for v in lookups.item_group_name %}
-      <option value="{{ v }}" {% if filters.item_group_name == v %}selected{% endif %}>{{ v }}</option>
-      {% endfor %}
-    </select>
-  </label>
-  <label>Production method
-    <select class="input-lg" name="production_method">
-      <option value="">Any</option>
-      {% for v in lookups.production_method %}
-      <option value="{{ v }}" {% if filters.production_method == v %}selected{% endif %}>{{ v }}</option>
-      {% endfor %}
-    </select>
-  </label>
-  <label>Tag (any of 4 fields)
-    <input class="input-lg" name="tag" value="{{ filters.tag }}" placeholder="*LED*">
-  </label>
-  <div class="form-actions">
-    <button type="submit" class="btn btn-primary btn-lg">Search</button>
-    <a class="btn btn-ghost" href="/search">Reset</a>
-  </div>
+<form method="get" action="/search" id="search-form">
+  <section class="card">
+    <h2>Filters</h2>
+    <div class="panel-b">
+      <div class="filters">
+        <div>
+          <label>Name / quick</label>
+          <input class="input-lg" name="q" value="{{ filters.q }}" placeholder="Name or *wildcard*">
+        </div>
+        <div>
+          <label>Country</label>
+          <select class="input-lg" name="country">
+            <option value="">Any</option>
+            {% for v in lookups.country %}
+            <option value="{{ v }}" {% if filters.country == v %}selected{% endif %}>{{ v }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label>Interest</label>
+          <select class="input-lg" name="interest_level">
+            <option value="">Any</option>
+            {% for v in interest_level_values %}
+            <option value="{{ v }}" {% if filters.interest_level == v %}selected{% endif %}>{{ v }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label>Grouping</label>
+          <select class="input-lg" name="grouping">
+            <option value="">Any</option>
+            {% for v in grouping_options %}
+            <option value="{{ v }}" {% if filters.grouping == v %}selected{% endif %}>{{ v }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label>Status</label>
+          <select class="input-lg" name="status">
+            <option value="">Any</option>
+            {% for st in status_values %}
+            <option value="{{ st }}" {% if filters.status == st %}selected{% endif %}>{{ st }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label>Nature</label>
+          <select class="input-lg" name="nature_of_product">
+            <option value="">Any</option>
+            {% for v in lookups.nature_of_product %}
+            <option value="{{ v }}" {% if filters.nature_of_product == v %}selected{% endif %}>{{ v }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label>Item Group</label>
+          <select class="input-lg" name="item_group_name">
+            <option value="">Any</option>
+            {% for v in lookups.item_group_name %}
+            <option value="{{ v }}" {% if filters.item_group_name == v %}selected{% endif %}>{{ v }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label>Meet</label>
+          <select class="input-lg" name="meet">
+            <option value="">Any</option>
+            {% for v in lookups.meet %}
+            <option value="{{ v }}" {% if filters.meet == v %}selected{% endif %}>{{ v }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      {% set adv_open = filters.factory_trading_name or filters.contact_name or filters.email or filters.city or filters.website or filters.tel_whatsapp_wechat or filters.notes or filters.cn_province or filters.production_method or filters.tag %}
+      <details class="advanced-toggle" {% if adv_open %}open{% endif %}>
+        <summary>Advanced search — all master-data fields</summary>
+        <div class="advanced-body">
+          <div class="filters">
+            <div>
+              <label>Factory name</label>
+              <input class="input-lg" name="factory_trading_name" value="{{ filters.factory_trading_name }}">
+            </div>
+            <div>
+              <label>Contact</label>
+              <input class="input-lg" name="contact_name" value="{{ filters.contact_name }}">
+            </div>
+            <div>
+              <label>Email</label>
+              <input class="input-lg" name="email" value="{{ filters.email }}">
+            </div>
+            <div>
+              <label>Tel / WhatsApp / WeChat</label>
+              <input class="input-lg" name="tel_whatsapp_wechat" value="{{ filters.tel_whatsapp_wechat }}">
+            </div>
+            <div>
+              <label>Website</label>
+              <input class="input-lg" name="website" value="{{ filters.website }}">
+            </div>
+            <div>
+              <label>City</label>
+              <input class="input-lg" name="city" value="{{ filters.city }}">
+            </div>
+            <div>
+              <label>CN Province</label>
+              <select class="input-lg" name="cn_province">
+                <option value="">Any</option>
+                {% for v in lookups.cn_province %}
+                <option value="{{ v }}" {% if filters.cn_province == v %}selected{% endif %}>{{ v }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label>Production method</label>
+              <select class="input-lg" name="production_method">
+                <option value="">Any</option>
+                {% for v in lookups.production_method %}
+                <option value="{{ v }}" {% if filters.production_method == v %}selected{% endif %}>{{ v }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label>Tags (any of Tag 2–4 / free text)</label>
+              <input class="input-lg" name="tag" value="{{ filters.tag }}" placeholder="*LED*">
+            </div>
+            <div>
+              <label>Notes</label>
+              <input class="input-lg" name="notes" value="{{ filters.notes }}">
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <div class="bar">
+        <a class="btn" href="/search">Clear</a>
+        <button type="submit" class="btn btn-primary">Run search</button>
+      </div>
+    </div>
+  </section>
 </form>
 
 {% else %}
 {# Results-only view #}
-<div class="page-head">
-  <h1>{{ results|length }} result(s)</h1>
+<div class="toolbar">
+  <div>
+    <h1>{{ results|length }} result(s)</h1>
+  </div>
   <div class="row-actions">
     <a class="btn btn-primary" href="/search">New search</a>
     <a class="btn" href="/search/export?{{ request.query_string.decode() }}">Export Excel</a>
@@ -139,12 +193,14 @@
 
 {% if saved_searches|length < max_saved %}
 <section class="card">
+  <div class="card-body">
   <form method="post" action="/search/favorites" class="search-inline">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <input type="hidden" name="filters_json" id="filters-json" value="">
     <input class="input-lg" name="name" placeholder="Save this search as favorite…" required maxlength="80">
     <button type="submit" class="btn btn-primary" onclick="document.getElementById('filters-json').value=JSON.stringify(Object.fromEntries(new URLSearchParams(window.location.search)))">Save favorite</button>
   </form>
+  </div>
 </section>
 {% endif %}
 
@@ -177,7 +233,7 @@
       {% for s in results %}
       <tr class="clickable-row" data-href="/suppliers/{{ s.id_supplier }}" tabindex="0" role="link">
         {% for key in visible_columns %}
-          <td>
+          <td {% if key == 'factory_trading_name' %}class="name"{% endif %}>
             {% if key == 'factory_trading_name' %}
               <a class="row-main-link" href="/suppliers/{{ s.id_supplier }}">{{ s.factory_trading_name or '' }}</a>
             {% elif key == 'status' %}
@@ -196,7 +252,7 @@
           </td>
         {% endfor %}
         <td class="row-actions" onclick="event.stopPropagation()">
-          <a href="/suppliers/{{ s.id_supplier }}" class="btn btn-sm">View</a>
+          <a href="/suppliers/{{ s.id_supplier }}">View</a>
         </td>
       </tr>
       {% else %}

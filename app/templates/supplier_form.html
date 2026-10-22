@@ -1,14 +1,19 @@
 {% extends "base.html" %}
-{% block title %}{% if mode == 'create' %}Create{% else %}Edit{% endif %} Supplier — Supplier Management{% endblock %}
+{% block title %}{% if mode == 'create' %}Create{% else %}Edit{% endif %} Supplier — Supplier ERP{% endblock %}
 {% block content %}
 <div class="page-head">
-  <h1>{% if mode == 'create' %}Create Supplier{% else %}Edit Supplier {{ supplier.short_code or supplier.factory_trading_name or '' }}{% endif %}</h1>
+  <div>
+    <h1>{% if mode == 'create' %}New supplier record{% else %}Edit supplier{% if supplier.short_code %} · {{ supplier.short_code }}{% endif %}{% endif %}</h1>
+    <p class="sub">* Required · Email or Tel/WhatsApp/WeChat required</p>
+  </div>
   {% if mode == 'edit' %}
-  <a href="/suppliers/{{ supplier.id_supplier }}" class="btn btn-ghost">← View</a>
+  <a href="/suppliers/{{ supplier.id_supplier }}" class="btn">← View</a>
   {% else %}
-  <a href="/" class="btn btn-ghost">← Back</a>
+  <a href="/" class="btn">Cancel</a>
   {% endif %}
 </div>
+
+<div class="hint-bar">Validation: Finish product → Item Group · OEM → Production method · Grouping required · ≥1 free Tag</div>
 
 {% if errors %}
 <div class="flash flash-error">
@@ -43,176 +48,204 @@
 <form method="post"
       action="{% if mode == 'create' %}/suppliers/new{% else %}/suppliers/{{ supplier.id_supplier }}/edit{% endif %}"
       enctype="multipart/form-data"
-      class="card form-grid mobile-form"
+      class="form-grid mobile-form"
       id="supplier-form">
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 
   <fieldset>
-    <legend>Identity</legend>
-    <label>Code (SUP-XXXX)
-      <input class="input-lg" name="short_code" value="{{ supplier.short_code or '' }}" placeholder="Auto if empty">
-    </label>
-    <label>Status *
-      <select class="input-lg" name="status" required>
-        {% for st in status_values %}
-        <option value="{{ st }}" {% if supplier.status == st %}selected{% endif %}>{{ st }}</option>
-        {% endfor %}
-      </select>
-    </label>
-    <label>Interest level
-      <select class="input-lg" name="interest_level">
-        <option value="">—</option>
-        {% for v in interest_level_values %}
-        <option value="{{ v }}" {% if supplier.interest_level == v %}selected{% endif %}>{{ v }}</option>
-        {% endfor %}
-      </select>
-    </label>
-    <label>Factory / Trading Name *
-      <input class="input-lg" name="factory_trading_name" value="{{ supplier.factory_trading_name or '' }}" required>
-    </label>
-    <label>Meet
-      <select class="input-lg" name="meet">
-        <option value="">—</option>
-        {% for v in lookups.meet %}
-        <option value="{{ v }}" {% if supplier.meet == v %}selected{% endif %}>{{ v }}</option>
-        {% endfor %}
-      </select>
-    </label>
-  </fieldset>
-
-  <fieldset>
-    <legend>Location</legend>
-    <label>Country *
-      <select class="input-lg" name="country" id="field-country" required>
-        {% for v in lookups.country %}
-        <option value="{{ v }}" {% if (supplier.country or 'China') == v %}selected{% endif %}>{{ v }}</option>
-        {% endfor %}
-      </select>
-    </label>
-    <label>CN Province
-      <select class="input-lg" name="cn_province" id="field-cn-province">
-        <option value="">—</option>
-        {% for v in lookups.cn_province %}
-        <option value="{{ v }}" {% if supplier.cn_province == v %}selected{% endif %}>{{ v }}</option>
-        {% endfor %}
-      </select>
-    </label>
-    <label>City
-      <input class="input-lg" name="city" value="{{ supplier.city or '' }}">
-    </label>
-  </fieldset>
-
-  <fieldset>
-    <legend>Contact</legend>
-    <p class="muted fieldset-hint">Email or Tel / WhatsApp / WeChat — at least one required.</p>
-    <label>Contact name
-      <input class="input-lg" name="contact_name" value="{{ supplier.contact_name or '' }}">
-    </label>
-    <label>Email
-      <input class="input-lg" type="email" name="email" id="field-email" value="{{ supplier.email or '' }}">
-    </label>
-    <label>Tel / WhatsApp / WeChat
-      <input class="input-lg" name="tel_whatsapp_wechat" id="field-tel" value="{{ supplier.tel_whatsapp_wechat or '' }}">
-    </label>
-    <label>Website
-      <input class="input-lg" name="website" value="{{ supplier.website or '' }}">
-    </label>
-  </fieldset>
-
-  <fieldset>
-    <legend>Product</legend>
-    <label>Nature of Product
-      <select class="input-lg" name="nature_of_product" id="field-nature">
-        <option value="">—</option>
-        {% for v in lookups.nature_of_product %}
-        <option value="{{ v }}" {% if supplier.nature_of_product == v %}selected{% endif %}>{{ v }}</option>
-        {% endfor %}
-      </select>
-    </label>
-    <label id="label-item-group">Item Group <span class="req-hint" id="hint-item-group" hidden>(required for Finish product)</span>
-      <select class="input-lg" name="item_group_name" id="field-item-group">
-        <option value="">—</option>
-        {% for v in lookups.item_group_name %}
-        <option value="{{ v }}" {% if supplier.item_group_name == v %}selected{% endif %}>{{ v }}</option>
-        {% endfor %}
-      </select>
-    </label>
-    <label id="label-method">Production method <span class="req-hint" id="hint-method" hidden>(required for OEM)</span>
-      <select class="input-lg" name="production_method" id="field-method">
-        <option value="">—</option>
-        {% for v in lookups.production_method %}
-        <option value="{{ v }}" {% if supplier.production_method == v %}selected{% endif %}>{{ v }}</option>
-        {% endfor %}
-      </select>
-    </label>
-  </fieldset>
-
-  <fieldset>
-    <legend>Grouping &amp; Tags</legend>
-    <p class="muted fieldset-hint">Grouping is mandatory. Also enter at least one free Tag (2–4). Temporary Grouping list = known tags until the final list is provided.</p>
-    <label>Grouping *
-      <select class="input-lg" name="tag_1" id="field-grouping" required>
-        <option value="">—</option>
-        {% for v in grouping_options %}
-        <option value="{{ v }}" {% if supplier.tag_1 == v %}selected{% endif %}>{{ v }}</option>
-        {% endfor %}
-      </select>
-    </label>
-    <input type="hidden" name="tag_resolve_1" id="tag-resolve-1" value="">
-    {% for i in range(2,5) %}
-    {% set field = 'tag_' ~ i %}
-    <label>Tag {{ i }}{% if i == 2 %} *{% endif %}
-      <input class="input-lg tag-input" name="tag_{{ i }}" id="tag-input-{{ i }}"
-             value="{{ supplier['tag_' ~ i] or '' }}" autocomplete="off" list="tag-suggestions-{{ i }}"
-             data-tag-index="{{ i }}">
-      <datalist id="tag-suggestions-{{ i }}"></datalist>
-    </label>
-    <input type="hidden" name="tag_resolve_{{ i }}" id="tag-resolve-{{ i }}" value=""
-           {% if need_tag_confirm %}{% for ti in tag_issues %}{% if ti.field == field %}required{% endif %}{% endfor %}{% endif %}>
-    <div class="tag-resolve" id="tag-resolve-box-{{ i }}">
-      {% for ti in tag_issues %}
-        {% if ti.field == field %}
-        <div class="tag-resolve-card">
-          <p><strong>Similar tag exists:</strong> you typed “{{ ti.typed }}”.</p>
-          {% for c in ti.candidates %}
-          <label class="check">
-            <input type="radio" name="tag_resolve_choice_{{ i }}" value="use:{{ c }}"
-                   onchange="document.getElementById('tag-resolve-{{ i }}').value=this.value; document.getElementById('tag-input-{{ i }}').value=this.value.slice(4);">
-            Use existing “{{ c }}”
-          </label>
+    <legend>1. Identity</legend>
+    <div class="panel-b grid4">
+      <div>
+        <label>Code</label>
+        <input class="input-lg" name="short_code" value="{{ supplier.short_code or '' }}" placeholder="Auto if empty" {% if mode == 'create' and not supplier.short_code %}{% endif %}>
+      </div>
+      <div>
+        <label>Status <span class="req">*</span></label>
+        <select class="input-lg" name="status" required>
+          {% for st in status_values %}
+          <option value="{{ st }}" {% if supplier.status == st %}selected{% endif %}>{{ st }}</option>
           {% endfor %}
-          <label class="check">
-            <input type="radio" name="tag_resolve_choice_{{ i }}" value="keep"
-                   onchange="document.getElementById('tag-resolve-{{ i }}').value='keep';">
-            Keep as typed “{{ ti.typed }}”
-          </label>
+        </select>
+      </div>
+      <div>
+        <label>Interest level</label>
+        <select class="input-lg" name="interest_level">
+          <option value="">—</option>
+          {% for v in interest_level_values %}
+          <option value="{{ v }}" {% if supplier.interest_level == v %}selected{% endif %}>{{ v }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label>Meet</label>
+        <select class="input-lg" name="meet">
+          <option value="">—</option>
+          {% for v in lookups.meet %}
+          <option value="{{ v }}" {% if supplier.meet == v %}selected{% endif %}>{{ v }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="full">
+        <label>Factory / Trading Name <span class="req">*</span></label>
+        <input class="input-lg" name="factory_trading_name" value="{{ supplier.factory_trading_name or '' }}" required>
+      </div>
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>2. Location</legend>
+    <div class="panel-b grid3">
+      <div>
+        <label>Country <span class="req">*</span></label>
+        <select class="input-lg" name="country" id="field-country" required>
+          {% for v in lookups.country %}
+          <option value="{{ v }}" {% if (supplier.country or 'China') == v %}selected{% endif %}>{{ v }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label>CN Province</label>
+        <select class="input-lg" name="cn_province" id="field-cn-province">
+          <option value="">—</option>
+          {% for v in lookups.cn_province %}
+          <option value="{{ v }}" {% if supplier.cn_province == v %}selected{% endif %}>{{ v }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label>City</label>
+        <input class="input-lg" name="city" value="{{ supplier.city or '' }}">
+      </div>
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>3. Contact</legend>
+    <div class="panel-b grid4">
+      <div>
+        <label>Contact name</label>
+        <input class="input-lg" name="contact_name" value="{{ supplier.contact_name or '' }}">
+      </div>
+      <div>
+        <label>Email <span class="hint">(or phone)</span></label>
+        <input class="input-lg" type="email" name="email" id="field-email" value="{{ supplier.email or '' }}">
+      </div>
+      <div>
+        <label>Tel / WhatsApp / WeChat <span class="hint">(or email)</span></label>
+        <input class="input-lg" name="tel_whatsapp_wechat" id="field-tel" value="{{ supplier.tel_whatsapp_wechat or '' }}">
+      </div>
+      <div>
+        <label>Website</label>
+        <input class="input-lg" name="website" value="{{ supplier.website or '' }}">
+      </div>
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>4. Product &amp; grouping</legend>
+    <div class="panel-b grid4">
+      <div>
+        <label>Nature of Product</label>
+        <select class="input-lg" name="nature_of_product" id="field-nature">
+          <option value="">—</option>
+          {% for v in lookups.nature_of_product %}
+          <option value="{{ v }}" {% if supplier.nature_of_product == v %}selected{% endif %}>{{ v }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label id="label-item-group">Item Group <span class="req-hint" id="hint-item-group" hidden>(required for Finish product)</span></label>
+        <select class="input-lg" name="item_group_name" id="field-item-group">
+          <option value="">—</option>
+          {% for v in lookups.item_group_name %}
+          <option value="{{ v }}" {% if supplier.item_group_name == v %}selected{% endif %}>{{ v }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label id="label-method">Production method <span class="req-hint" id="hint-method" hidden>(required for OEM)</span></label>
+        <select class="input-lg" name="production_method" id="field-method">
+          <option value="">—</option>
+          {% for v in lookups.production_method %}
+          <option value="{{ v }}" {% if supplier.production_method == v %}selected{% endif %}>{{ v }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label>Grouping <span class="req">*</span></label>
+        <select class="input-lg" name="tag_1" id="field-grouping" required>
+          <option value="">Select…</option>
+          {% for v in grouping_options %}
+          <option value="{{ v }}" {% if supplier.tag_1 == v %}selected{% endif %}>{{ v }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>5. Tags (free text) · at least one required</legend>
+    <div class="panel-b grid3">
+      <input type="hidden" name="tag_resolve_1" id="tag-resolve-1" value="">
+      {% for i in range(2,5) %}
+      {% set field = 'tag_' ~ i %}
+      <div>
+        <label>Tag {{ i }}{% if i == 2 %} <span class="req">*</span>{% endif %}</label>
+        <input class="input-lg tag-input" name="tag_{{ i }}" id="tag-input-{{ i }}"
+               value="{{ supplier['tag_' ~ i] or '' }}" autocomplete="off" list="tag-suggestions-{{ i }}"
+               data-tag-index="{{ i }}"
+               {% if i == 2 %}placeholder="Suggests similar tags"{% endif %}>
+        <datalist id="tag-suggestions-{{ i }}"></datalist>
+        <input type="hidden" name="tag_resolve_{{ i }}" id="tag-resolve-{{ i }}" value=""
+               {% if need_tag_confirm %}{% for ti in tag_issues %}{% if ti.field == field %}required{% endif %}{% endfor %}{% endif %}>
+        <div class="tag-resolve" id="tag-resolve-box-{{ i }}">
+          {% for ti in tag_issues %}
+            {% if ti.field == field %}
+            <div class="tag-resolve-card">
+              <p><strong>Similar tag exists:</strong> you typed “{{ ti.typed }}”.</p>
+              {% for c in ti.candidates %}
+              <label class="check">
+                <input type="radio" name="tag_resolve_choice_{{ i }}" value="use:{{ c }}"
+                       onchange="document.getElementById('tag-resolve-{{ i }}').value=this.value; document.getElementById('tag-input-{{ i }}').value=this.value.slice(4);">
+                Use existing “{{ c }}”
+              </label>
+              {% endfor %}
+              <label class="check">
+                <input type="radio" name="tag_resolve_choice_{{ i }}" value="keep"
+                       onchange="document.getElementById('tag-resolve-{{ i }}').value='keep';">
+                Keep as typed “{{ ti.typed }}”
+              </label>
+            </div>
+            {% endif %}
+          {% endfor %}
         </div>
-        {% endif %}
+      </div>
       {% endfor %}
     </div>
-    {% endfor %}
   </fieldset>
 
   <fieldset>
-    <legend>Notes</legend>
-    <label>Notes (max {{ notes_max_len }})
-      <textarea class="input-lg" name="notes" maxlength="{{ notes_max_len }}" rows="3">{{ supplier.notes or '' }}</textarea>
-    </label>
-  </fieldset>
-
-  <fieldset class="upload-block">
-    <legend>Attachments (max {{ max_upload_mb }} MB each)</legend>
-    <label>Type for new uploads
-      <select class="input-lg" name="attachment_type">
-        {% for key, label in attachment_types %}
-        <option value="{{ key }}">{{ label }}</option>
-        {% endfor %}
-      </select>
-    </label>
-    <label class="file-drop">
-      <span>Photos / PDFs — tap to choose or take photo</span>
-      <input class="input-lg" type="file" name="files" multiple accept="image/*,.pdf,application/pdf" capture="environment">
-    </label>
+    <legend>6. Notes &amp; attachments</legend>
+    <div class="panel-b grid2">
+      <div>
+        <label>Notes (max {{ notes_max_len }})</label>
+        <textarea class="input-lg" name="notes" maxlength="{{ notes_max_len }}" rows="3">{{ supplier.notes or '' }}</textarea>
+      </div>
+      <div>
+        <label>Attachments (max {{ max_upload_mb }} MB each)</label>
+        <label style="font-weight:500;margin-top:4px;margin-bottom:4px">Type for new uploads
+          <select class="input-lg" name="attachment_type">
+            {% for key, label in attachment_types %}
+            <option value="{{ key }}">{{ label }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="file-drop">
+          <span>Upload / drop files · PDF &amp; image preview</span>
+          <input class="input-lg" type="file" name="files" multiple accept="image/*,.pdf,application/pdf" capture="environment">
+        </label>
+      </div>
+    </div>
   </fieldset>
 
   {% if need_duplicate_confirm %}
@@ -222,19 +255,23 @@
   </label>
   {% endif %}
 
-  <div class="form-actions">
-    <button type="submit" class="btn btn-primary btn-lg">Save Supplier</button>
+  <div class="bar">
     {% if mode == 'edit' %}
     <button type="submit" formaction="/suppliers/{{ supplier.id_supplier }}/delete"
-            class="btn btn-danger btn-lg"
+            class="btn btn-danger"
             onclick="return confirm('Delete this supplier permanently?');">Delete</button>
+    <a href="/suppliers/{{ supplier.id_supplier }}" class="btn">Cancel</a>
+    {% else %}
+    <a href="/" class="btn">Cancel</a>
     {% endif %}
+    <button type="submit" class="btn btn-primary">Save</button>
   </div>
 </form>
 
 {% if mode == 'edit' and attachments %}
 <section class="card">
   <h2>Existing attachments</h2>
+  <div class="card-body">
   <ul class="att-list">
     {% for a in attachments %}
     <li class="att-card">
@@ -260,6 +297,7 @@
     </li>
     {% endfor %}
   </ul>
+  </div>
 </section>
 {% endif %}
 {% endblock %}

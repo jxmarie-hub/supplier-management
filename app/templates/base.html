@@ -8,27 +8,27 @@
 </head>
 <body>
   <header class="topbar">
-    <div class="brand"><a href="/">Supplier Management</a></div>
+    <div class="brand"><a href="/">Supplier ERP</a></div>
     {% if user %}
     <nav class="nav">
       <a href="/" class="{% if nav_active == 'home' %}nav-active{% endif %}">Home</a>
-      <a href="/suppliers/new" class="btn btn-sm {% if nav_active == 'create' %}nav-active btn-nav-active{% else %}btn-primary{% endif %}">Create Supplier</a>
+      <a href="/suppliers/new" class="{% if nav_active == 'create' %}nav-active{% endif %}">Create</a>
       <a href="/search" class="{% if nav_active == 'search' %}nav-active{% endif %}">Search</a>
       {% if user.role == 'admin' %}
       <a href="/admin/users" class="{% if nav_active == 'users' %}nav-active{% endif %}">Users</a>
       <a href="/admin/lookups" class="{% if nav_active == 'lists' %}nav-active{% endif %}">Lists</a>
       <a href="/admin/tags" class="{% if nav_active == 'tags' %}nav-active{% endif %}">Tags</a>
       {% endif %}
-      <span class="user-chip">{{ user.username }} ({{ user.role }})</span>
-      <form method="post" action="/logout" class="inline">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        <button type="submit" class="btn btn-ghost btn-sm">Logout</button>
-      </form>
     </nav>
+    <span class="user-chip">{{ user.username }}</span>
+    <form method="post" action="/logout" class="inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button type="submit" class="btn btn-ghost btn-sm">Logout</button>
+    </form>
     {% endif %}
   </header>
 
-  <main class="container">
+  <main class="container{% block container_class %}{% endblock %}">
     {% for m in flash_messages %}
       <div class="flash flash-{{ m.category }}">{{ m.message }}</div>
     {% endfor %}

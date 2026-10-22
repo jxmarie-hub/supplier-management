@@ -1,8 +1,15 @@
 {% extends "base.html" %}
-{% block title %}Home — Supplier Management{% endblock %}
+{% block title %}Home — Supplier ERP{% endblock %}
+{% block container_class %} wide{% endblock %}
 {% block content %}
-<div class="page-head">
-  <h1>Suppliers</h1>
+<div class="toolbar">
+  <div>
+    <h1>Supplier list</h1>
+    <p class="sub" style="margin:0">{{ suppliers|length }} record(s)</p>
+  </div>
+  <div class="row-actions">
+    <a href="/suppliers/new" class="btn btn-primary">+ New</a>
+  </div>
 </div>
 
 <details class="card columns-picker">
@@ -39,7 +46,7 @@
       {% for s in suppliers %}
       <tr class="clickable-row" data-href="/suppliers/{{ s.id_supplier }}" tabindex="0" role="link">
         {% for key in visible_columns %}
-          <td>
+          <td {% if key == 'factory_trading_name' %}class="name"{% endif %}>
             {% if key == 'factory_trading_name' %}
               <a class="row-main-link" href="/suppliers/{{ s.id_supplier }}">{{ s.factory_trading_name or '' }}</a>
             {% elif key == 'status' %}
@@ -56,8 +63,7 @@
           </td>
         {% endfor %}
         <td class="row-actions" onclick="event.stopPropagation()">
-          <a href="/suppliers/{{ s.id_supplier }}" class="btn btn-sm">View</a>
-          <a href="/suppliers/{{ s.id_supplier }}/edit" class="btn btn-sm btn-ghost">Edit</a>
+          <a href="/suppliers/{{ s.id_supplier }}">View</a>
         </td>
       </tr>
       {% else %}
@@ -66,7 +72,6 @@
     </tbody>
   </table>
 </div>
-<p class="muted">{{ suppliers|length }} supplier(s)</p>
 {% endblock %}
 {% block scripts %}
 <script>initClickableRows();</script>
