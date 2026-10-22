@@ -3,18 +3,13 @@
 {% block content %}
 <div class="page-head">
   <h1>Suppliers</h1>
-  <form method="get" action="/" class="search-inline">
-    <input type="search" name="q" value="{{ q }}" placeholder="Search (wildcards: LED* or *LED*)" class="input-lg">
-    <button type="submit" class="btn btn-primary">Search</button>
-    {% if q %}<a href="/" class="btn btn-ghost">Clear</a>{% endif %}
-  </form>
 </div>
 
 <details class="card columns-picker">
   <summary>Show / hide columns</summary>
   <form method="post" action="/columns" class="columns-form">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <input type="hidden" name="next" value="/{% if q %}?q={{ q|urlencode }}&sort={{ sort }}&dir={{ dir }}{% endif %}">
+    <input type="hidden" name="next" value="/?sort={{ sort }}&dir={{ dir }}">
     {% for key, label in all_columns %}
       <label class="check">
         <input type="checkbox" name="columns" value="{{ key }}" {% if key in visible_columns %}checked{% endif %}>
@@ -32,7 +27,7 @@
         {% for key in visible_columns %}
           {% set next_dir = 'desc' if sort == key and dir == 'asc' else 'asc' %}
           <th>
-            <a href="/?q={{ q|urlencode }}&sort={{ key }}&dir={{ next_dir }}">
+            <a href="/?sort={{ key }}&dir={{ next_dir }}">
               {{ column_labels.get(key, key) }}{% if sort == key %} {% if dir == 'asc' %}↑{% else %}↓{% endif %}{% endif %}
             </a>
           </th>

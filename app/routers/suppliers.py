@@ -9,7 +9,6 @@ from fastapi.responses import FileResponse, RedirectResponse
 
 from app import config
 from app.database import (
-    build_search_where,
     db_session,
     find_duplicate_suppliers,
     lookups_by_type,
@@ -123,7 +122,6 @@ def _form_context(
 @router.get("/")
 def home(
     request: Request,
-    q: str = Query(""),
     sort: str = Query("factory_trading_name"),
     dir: str = Query("asc"),
 ):
@@ -139,10 +137,9 @@ def home(
         sort_col = "factory_trading_name"
     direction = "DESC" if dir.lower() == "desc" else "ASC"
 
-    where, params = build_search_where({"q": q})
-    sql = f"SELECT * FROM suppliers WHERE {where} ORDER BY {sort_col} COLLATE NOCASE {direction}"
+    sql = f"SELECT * FROM suppliers ORDER BY {sort_col} COLLATE NOCASE {direction}"
     with db_session() as conn:
-        rows = [dict(r) for r in conn.execute(sql, params).fetchall()]
+        rows = [dict(r) for r in conn.execute(sql).fetchall()]
         visible = load_visible_columns(user["id"])
 
     return render(
@@ -150,7 +147,6 @@ def home(
         "home.html",
         {
             "suppliers": [_enrich(r) for r in rows],
-            "q": q,
             "sort": sort,
             "dir": "desc" if direction == "DESC" else "asc",
             "visible_columns": visible,
