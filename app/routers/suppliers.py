@@ -219,7 +219,7 @@ def new_supplier_form(request: Request):
         grouping_options = _grouping_options(conn)
     blank = {f: "" for f in SUPPLIER_FIELDS}
     blank["country"] = config.DEFAULT_COUNTRY
-    blank["status"] = "Current"
+    blank["status"] = config.DEFAULT_STATUS
     blank["short_code"] = suggested
     return render(
         request,
@@ -233,7 +233,7 @@ async def create_supplier(
     request: Request,
     csrf_token: str = Form(""),
     short_code: str = Form(""),
-    status: str = Form("Current"),
+    status: str = Form(config.DEFAULT_STATUS),
     interest_level: str = Form(""),
     meet: str = Form(""),
     country: str = Form("China"),

@@ -25,7 +25,16 @@ grep -q "nav-active" /tmp/sm_home.html
 grep -q 'data-href="/suppliers/' /tmp/sm_home.html
 
 echo "== CSRF for create =="
-CSRF=$(curl -fsS -c "$COOKIE" -b "$COOKIE" "$BASE/suppliers/new" | sed -n 's/.*name="csrf_token" value="\([^"]*\)".*/\1/p' | head -1)
+CREATE_HTML=$(curl -fsS -c "$COOKIE" -b "$COOKIE" "$BASE/suppliers/new")
+CSRF=$(echo "$CREATE_HTML" | sed -n 's/.*name="csrf_token" value="\([^"]*\)".*/\1/p' | head -1)
+
+echo "== Create defaults + mandatory * =="
+echo "$CREATE_HTML" | grep -A5 'name="status"' | grep -q 'selected.>Prospect<\|selected[^>]*>Prospect<'
+echo "$CREATE_HTML" | grep -A20 'name="country"' | head -30 | grep -q 'selected[^>]*>China<'
+echo "$CREATE_HTML" | grep -q 'Nature of Product <span class="req">\*</span>'
+echo "$CREATE_HTML" | grep -q 'name="nature_of_product"[^>]*required\|nature_of_product" id="field-nature" required'
+echo "$CREATE_HTML" | grep -q 'Grouping <span class="req">\*</span>'
+echo "create_defaults_ok"
 
 echo "== Create supplier → read view =="
 curl -sS -c "$COOKIE" -b "$COOKIE" -X POST "$BASE/suppliers/new" \
@@ -88,15 +97,23 @@ SR=$(curl -fsS -c "$COOKIE" -b "$COOKIE" "$BASE/search?q=${SMOKE_NAME// /+}")
 echo "$SR" | grep -q "$SMOKE_NAME"
 echo "$SR" | grep -q 'id="search-form"'
 echo "$SR" | grep -q "Run search"
-echo "$SR" | grep -q 'data-table'
+echo "$SR" | grep -q 'data-table filterable'
+echo "$SR" | grep -q 'initColumnFilters'
+echo "search_column_filters_markup_ok"
 
 echo "== Export =="
 curl -fsS -c "$COOKIE" -b "$COOKIE" "$BASE/search/export?country=China" -o /tmp/sm_export.xlsx
 python3 - <<'PY'
 from openpyxl import load_workbook
 wb=load_workbook('/tmp/sm_export.xlsx')
-assert wb.active.max_row >= 2
-print('export_rows', wb.active.max_row)
+ws=wb.active
+assert ws.max_row >= 2
+assert ws.auto_filter.ref, 'AutoFilter missing'
+assert ws.freeze_panes == 'A2'
+headers=[c.value for c in ws[1]]
+assert headers, 'no headers'
+assert ws.column_dimensions['A'].width and ws.column_dimensions['A'].width >= 8
+print('export_rows', ws.max_row, 'cols', len(headers), 'autofilter', ws.auto_filter.ref)
 PY
 
 echo "== Upload OK via edit =="

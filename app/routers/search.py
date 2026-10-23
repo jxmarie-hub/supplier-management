@@ -8,6 +8,8 @@ from urllib.parse import urlencode
 from fastapi import APIRouter, Form, Query, Request
 from fastapi.responses import RedirectResponse, StreamingResponse
 from openpyxl import Workbook
+from openpyxl.styles import Font
+from openpyxl.utils import get_column_letter
 
 from app import config
 from app.database import (
@@ -177,34 +179,57 @@ def search_page(request: Request):
     )
 
 
+def _cell_value_for_export(supplier: dict, key: str):
+    """Match on-screen search result cell content for Excel."""
+    if key == "tags":
+        return supplier.get("tags") or ""
+    if key == "notes":
+        return supplier.get("notes") or ""
+    return supplier.get(key) or ""
+
+
 @router.get("/search/export")
 def export_search(request: Request):
+    """Excel export: same columns as search results, AutoFilter on, widths fitted."""
     user = current_user(request)
     if not user:
         return login_redirect()
     filters = _filters_from_request(request)
     results = _run_search(filters)
+    visible = _visible_columns_with_filters(load_visible_columns(user["id"]), filters)
+    labels = dict(config.ALL_COLUMNS)
+    headers = [labels.get(k, k) for k in visible]
+
     wb = Workbook()
     ws = wb.active
     ws.title = "Suppliers"
-    headers = [
-        "Code", "Status", "Interest level", "Meet", "Country", "CN Province", "City",
-        "Factory / Trading Name", "Website", "Contact name", "Email",
-        "Tel / WhatsApp / WeChat", "Nature of Product", "Item Group",
-        "Production method", "Grouping", "Tag 2", "Tag 3", "Tag 4", "Notes",
-        "Created", "Updated",
-    ]
     ws.append(headers)
+    for cell in ws[1]:
+        cell.font = Font(bold=True)
+
     for s in results:
-        ws.append([
-            s.get("short_code"), s.get("status"), s.get("interest_level"), s.get("meet"),
-            s.get("country"), s.get("cn_province"), s.get("city"),
-            s.get("factory_trading_name"), s.get("website"), s.get("contact_name"),
-            s.get("email"), s.get("tel_whatsapp_wechat"), s.get("nature_of_product"),
-            s.get("item_group_name"), s.get("production_method"),
-            s.get("tag_1"), s.get("tag_2"), s.get("tag_3"), s.get("tag_4"),
-            s.get("notes"), s.get("created_at"), s.get("updated_at"),
-        ])
+        ws.append([_cell_value_for_export(s, key) for key in visible])
+
+    # AutoFilter on header row (ready for Excel column filters)
+    last_row = max(1, len(results) + 1)
+    last_col = max(1, len(headers))
+    ws.auto_filter.ref = f"A1:{get_column_letter(last_col)}{last_row}"
+
+    # Freeze header
+    ws.freeze_panes = "A2"
+
+    # Column widths auto-sized to content
+    for col_idx in range(1, last_col + 1):
+        letter = get_column_letter(col_idx)
+        max_len = 0
+        for row in ws.iter_rows(min_col=col_idx, max_col=col_idx, min_row=1, max_row=last_row):
+            val = row[0].value
+            if val is None:
+                continue
+            max_len = max(max_len, len(str(val)))
+        # Cap very wide columns; leave a little padding
+        ws.column_dimensions[letter].width = min(max(max_len + 2, 10), 48)
+
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)

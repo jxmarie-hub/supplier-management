@@ -26,6 +26,7 @@ ALLOWED_UPLOAD_MIME = {
 }
 
 DEFAULT_COUNTRY = "China"
+DEFAULT_STATUS = "Prospect"
 NOTES_MAX_LEN = 200
 
 # Default home-table columns (keys match supplier attribute names)

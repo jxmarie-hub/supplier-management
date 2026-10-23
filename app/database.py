@@ -639,7 +639,9 @@ def validate_supplier_payload(data: dict[str, Any], lookups: dict[str, list[str]
         errors.append("Enter an email or a Tel / WhatsApp / WeChat number (at least one is required).")
 
     nature = (data.get("nature_of_product") or "").strip()
-    if nature and nature not in lookups.get("nature_of_product", []):
+    if not nature:
+        errors.append("Nature of Product is required.")
+    elif nature not in lookups.get("nature_of_product", []):
         errors.append("Nature of Product must be chosen from the list.")
 
     method = (data.get("production_method") or "").strip()

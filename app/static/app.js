@@ -19,6 +19,9 @@ function initConditionalFields() {
   const hintItem = document.getElementById("hint-item-group");
   const hintMethod = document.getElementById("hint-method");
 
+  const reqItem = document.getElementById("req-item-group");
+  const reqMethod = document.getElementById("req-method");
+
   function syncNature() {
     const isFinish = nature.value === "Finish product";
     const isOem = nature.value === "OEM";
@@ -27,6 +30,8 @@ function initConditionalFields() {
     }
     if (hintItem) hintItem.hidden = !isFinish;
     if (hintMethod) hintMethod.hidden = !isOem;
+    if (reqItem) reqItem.hidden = !isFinish;
+    if (reqMethod) reqMethod.hidden = !isOem;
     if (itemGroup) {
       if (isFinish) itemGroup.setAttribute("required", "required");
       else itemGroup.removeAttribute("required");
@@ -155,6 +160,14 @@ function initSupplierFormValidation() {
       if (focusEl) focusEl.focus();
       return;
     }
+    const natureEarly = (form.querySelector("#field-nature") || {}).value || "";
+    if (!String(natureEarly).trim()) {
+      e.preventDefault();
+      alert("Nature of Product is required.");
+      const n = form.querySelector("#field-nature");
+      if (n) n.focus();
+      return;
+    }
     const grouping = (form.querySelector("#field-grouping") || {}).value || "";
     if (!String(grouping).trim()) {
       e.preventDefault();
@@ -193,10 +206,104 @@ function initSupplierFormValidation() {
   });
 }
 
+
+function initColumnFilters(tableSelector) {
+  const table = document.querySelector(tableSelector || "table.data-table.filterable");
+  if (!table) return;
+  const thead = table.querySelector("thead");
+  const tbody = table.querySelector("tbody");
+  if (!thead || !tbody) return;
+  if (thead.querySelector("tr.col-filter-row")) return;
+
+  const headerRow = thead.querySelector("tr");
+  if (!headerRow) return;
+  const headers = Array.from(headerRow.children);
+  const filterRow = document.createElement("tr");
+  filterRow.className = "col-filter-row";
+
+  headers.forEach((th, colIdx) => {
+    const cell = document.createElement("th");
+    cell.className = "col-filter-cell";
+    // Skip action column (last empty header or no label)
+    const label = (th.textContent || "").trim();
+    const isAction = !label || th.classList.contains("no-filter");
+    if (isAction) {
+      filterRow.appendChild(cell);
+      return;
+    }
+    const select = document.createElement("select");
+    select.className = "col-filter-select";
+    select.setAttribute("aria-label", "Filter " + label);
+    select.dataset.col = String(colIdx);
+    const optAll = document.createElement("option");
+    optAll.value = "";
+    optAll.textContent = "All";
+    select.appendChild(optAll);
+
+    const values = new Set();
+    Array.from(tbody.rows).forEach((row) => {
+      const td = row.cells[colIdx];
+      if (!td) return;
+      const v = (td.textContent || "").replace(/\s+/g, " ").trim();
+      if (v) values.add(v);
+    });
+    Array.from(values)
+      .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }))
+      .forEach((v) => {
+        const opt = document.createElement("option");
+        opt.value = v;
+        opt.textContent = v.length > 40 ? v.slice(0, 37) + "…" : v;
+        select.appendChild(opt);
+      });
+
+    select.addEventListener("change", () => applyColumnFilters(table));
+    select.addEventListener("click", (e) => e.stopPropagation());
+    cell.appendChild(select);
+    filterRow.appendChild(cell);
+  });
+
+  thead.appendChild(filterRow);
+}
+
+function applyColumnFilters(table) {
+  const tbody = table.querySelector("tbody");
+  if (!tbody) return;
+  const filters = Array.from(table.querySelectorAll("select.col-filter-select")).map((sel) => ({
+    col: parseInt(sel.dataset.col, 10),
+    value: sel.value,
+  }));
+  let visible = 0;
+  Array.from(tbody.rows).forEach((row) => {
+    if (row.querySelector("td[colspan]")) {
+      row.style.display = "";
+      return;
+    }
+    let show = true;
+    for (const f of filters) {
+      if (!f.value) continue;
+      const td = row.cells[f.col];
+      const cellText = td ? (td.textContent || "").replace(/\s+/g, " ").trim() : "";
+      if (cellText !== f.value) {
+        show = false;
+        break;
+      }
+    }
+    row.style.display = show ? "" : "none";
+    if (show) visible += 1;
+  });
+  const counter = document.getElementById("result-filter-count");
+  if (counter) {
+    const total = Array.from(tbody.rows).filter((r) => !r.querySelector("td[colspan]")).length;
+    counter.textContent =
+      visible === total ? "" : " · showing " + visible + " of " + total + " (column filters)";
+  }
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   initConditionalFields();
   initTagAutocomplete();
   initTagSimilarityCheck();
   initClickableRows();
   initSupplierFormValidation();
+  initColumnFilters("table.data-table.filterable");
 });

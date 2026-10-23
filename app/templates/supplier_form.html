@@ -4,7 +4,7 @@
 <div class="page-head">
   <div>
     <h1>{% if mode == 'create' %}New supplier record{% else %}Edit supplier{% if supplier.short_code %} · {{ supplier.short_code }}{% endif %}{% endif %}</h1>
-    <p class="sub">* Required · Email or Tel/WhatsApp/WeChat required</p>
+    <p class="sub"><span class="req">*</span> Required fields · Email or Tel/WhatsApp/WeChat (at least one)</p>
   </div>
   {% if mode == 'edit' %}
   <a href="/suppliers/{{ supplier.id_supplier }}" class="btn">← View</a>
@@ -127,11 +127,11 @@
         <input class="input-lg" name="contact_name" value="{{ supplier.contact_name or '' }}">
       </div>
       <div>
-        <label>Email <span class="hint">(or phone)</span></label>
+        <label>Email <span class="req">*</span> <span class="hint">(or phone)</span></label>
         <input class="input-lg" type="email" name="email" id="field-email" value="{{ supplier.email or '' }}">
       </div>
       <div>
-        <label>Tel / WhatsApp / WeChat <span class="hint">(or email)</span></label>
+        <label>Tel / WhatsApp / WeChat <span class="req">*</span> <span class="hint">(or email)</span></label>
         <input class="input-lg" name="tel_whatsapp_wechat" id="field-tel" value="{{ supplier.tel_whatsapp_wechat or '' }}">
       </div>
       <div>
@@ -145,8 +145,8 @@
     <legend>4. Product &amp; grouping</legend>
     <div class="panel-b grid4">
       <div>
-        <label>Nature of Product</label>
-        <select class="input-lg" name="nature_of_product" id="field-nature">
+        <label>Nature of Product <span class="req">*</span></label>
+        <select class="input-lg" name="nature_of_product" id="field-nature" required>
           <option value="">—</option>
           {% for v in lookups.nature_of_product %}
           <option value="{{ v }}" {% if supplier.nature_of_product == v %}selected{% endif %}>{{ v }}</option>
@@ -154,7 +154,7 @@
         </select>
       </div>
       <div>
-        <label id="label-item-group">Item Group <span class="req-hint" id="hint-item-group" hidden>(required for Finish product)</span></label>
+        <label id="label-item-group">Item Group <span class="req" id="req-item-group" hidden>*</span> <span class="req-hint" id="hint-item-group" hidden>(required for Finish product)</span></label>
         <select class="input-lg" name="item_group_name" id="field-item-group">
           <option value="">—</option>
           {% for v in lookups.item_group_name %}
@@ -163,7 +163,7 @@
         </select>
       </div>
       <div>
-        <label id="label-method">Production method <span class="req-hint" id="hint-method" hidden>(required for OEM)</span></label>
+        <label id="label-method">Production method <span class="req" id="req-method" hidden>*</span> <span class="req-hint" id="hint-method" hidden>(required for OEM)</span></label>
         <select class="input-lg" name="production_method" id="field-method">
           <option value="">—</option>
           {% for v in lookups.production_method %}
@@ -184,7 +184,7 @@
   </fieldset>
 
   <fieldset>
-    <legend>5. Tags (free text) · at least one required</legend>
+    <legend>5. Tags (free text) · at least one required <span class="req">*</span></legend>
     <div class="panel-b grid3">
       <input type="hidden" name="tag_resolve_1" id="tag-resolve-1" value="">
       {% for i in range(2,5) %}
