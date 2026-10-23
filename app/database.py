@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timezone
+from difflib import SequenceMatcher
 from typing import Any, Iterator, Optional
 
 import bcrypt
@@ -14,7 +16,6 @@ from app import config
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-
 
 
 def first_name_from_username(username: str | None) -> str:
@@ -254,8 +255,14 @@ def _load_seed_data() -> dict:
         return json.load(f)
 
 
+_GROUPING_OPTIONS_CACHE: list[str] | None = None
+
+
 def get_grouping_options() -> list[str]:
-    """Fixed Grouping dropdown from Jean's seed list (tag_1)."""
+    """Fixed Grouping dropdown from Jean's seed list (tag_1). Cached per process."""
+    global _GROUPING_OPTIONS_CACHE
+    if _GROUPING_OPTIONS_CACHE is not None:
+        return list(_GROUPING_OPTIONS_CACHE)
     data = _load_seed_data()
     out: list[str] = []
     seen: set[str] = set()
@@ -268,7 +275,8 @@ def get_grouping_options() -> list[str]:
             continue
         seen.add(key)
         out.append(value)
-    return out
+    _GROUPING_OPTIONS_CACHE = list(out)
+    return list(out)
 
 
 def _sync_lookups_from_seed(conn: sqlite3.Connection) -> None:
@@ -582,6 +590,19 @@ def _migrate_demo_suppliers_v40(conn: sqlite3.Connection) -> None:
         ON CONFLICT(key) DO UPDATE SET value = excluded.value
         """
     )
+
+
+def username_map(conn: sqlite3.Connection, *user_ids: Any) -> dict[int, str]:
+    """Map user ids → usernames (skips falsy ids)."""
+    ids = [i for i in user_ids if i]
+    if not ids:
+        return {}
+    placeholders = ",".join("?" * len(ids))
+    rows = conn.execute(
+        f"SELECT id, username FROM users WHERE id IN ({placeholders})",
+        ids,
+    ).fetchall()
+    return {r["id"]: r["username"] for r in rows}
 
 
 def row_to_dict(row: Optional[sqlite3.Row]) -> Optional[dict[str, Any]]:
@@ -923,7 +944,8 @@ def merge_known_tags(conn, source_tag: str, target_tag: str) -> int:
     if not source_tag or not target_tag or source_tag.lower() == target_tag.lower():
         return 0
     updated = 0
-    for col in ("tag_1", "tag_2", "tag_3", "tag_4"):
+    # Free tags only — never rewrite Grouping (tag_1)
+    for col in ("tag_2", "tag_3", "tag_4"):
         cur = conn.execute(
             f"UPDATE suppliers SET {col} = ? WHERE {col} = ? COLLATE NOCASE",
             (target_tag, source_tag),
@@ -939,8 +961,6 @@ def merge_known_tags(conn, source_tag: str, target_tag: str) -> int:
 
 def normalize_tag_key(tag: str) -> str:
     """Lowercase and strip spaces/punctuation for tag comparison."""
-    import re
-
     return re.sub(r"[^a-z0-9]", "", (tag or "").lower())
 
 
@@ -995,8 +1015,6 @@ def find_similar_tag_labels(conn, typed: str) -> list[str]:
     Return existing tags similar to `typed` but not an exact case-insensitive match.
     Similarity: same normalize_tag_key, or high fuzzy ratio (difflib).
     """
-    from difflib import SequenceMatcher
-
     typed = (typed or "").strip()
     if not typed:
         return []

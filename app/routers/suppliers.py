@@ -13,6 +13,8 @@ from app.database import (
     find_duplicate_suppliers,
     first_name_from_username,
     format_audit_display,
+    get_grouping_options,
+    get_user_columns,
     lookups_by_type,
     next_short_code,
     normalize_supplier_payload,
@@ -20,13 +22,13 @@ from app.database import (
     resolve_tag_similarities,
     set_user_columns,
     supplier_tags_display,
+    username_map,
     utc_now,
     validate_supplier_payload,
 )
 from app.deps import (
     current_user,
     flash,
-    load_visible_columns,
     login_redirect,
     render,
     require_csrf,
@@ -98,17 +100,6 @@ def _tag_resolve_map(
     }
 
 
-def _username_map(conn, *user_ids) -> dict[int, str]:
-    ids = [i for i in user_ids if i]
-    if not ids:
-        return {}
-    placeholders = ",".join("?" * len(ids))
-    rows = conn.execute(
-        f"SELECT id, username FROM users WHERE id IN ({placeholders})", ids
-    ).fetchall()
-    return {r["id"]: r["username"] for r in rows}
-
-
 def _enrich_attachments(attachments: list[dict]) -> list[dict]:
     """Mark previewable image / PDF attachments for templates."""
     out = []
@@ -126,10 +117,8 @@ def _enrich_attachments(attachments: list[dict]) -> list[dict]:
     return out
 
 
-def _grouping_options(conn, current: str | None = None) -> list[str]:
-    """Fixed Grouping dropdown from Jean's seed list."""
-    from app.database import get_grouping_options
-
+def _grouping_options(current: str | None = None) -> list[str]:
+    """Fixed Grouping dropdown from Jean's seed list (+ current if legacy orphan)."""
     opts = get_grouping_options()
     cur = (current or "").strip()
     if cur and cur not in opts:
@@ -160,6 +149,7 @@ def _form_context(
         "status_values": config.STATUS_VALUES,
         "interest_level_values": config.INTEREST_LEVEL_VALUES,
         "attachment_types": config.ATTACHMENT_TYPES,
+        "attachment_type_labels": dict(config.ATTACHMENT_TYPES),
         "need_duplicate_confirm": need_duplicate_confirm,
         "tag_issues": tag_issues or [],
         "need_tag_confirm": need_tag_confirm,
@@ -189,8 +179,8 @@ def home(
     sql = f"SELECT * FROM suppliers ORDER BY {sort_col} COLLATE NOCASE {direction}"
     with db_session() as conn:
         rows = [dict(r) for r in conn.execute(sql).fetchall()]
-        visible = load_visible_columns(user["id"])
-        unames = _username_map(
+        visible = get_user_columns(conn, user["id"])
+        unames = username_map(
             conn,
             *[r.get("created_by") for r in rows],
             *[r.get("updated_by") for r in rows],
@@ -238,7 +228,7 @@ def new_supplier_form(request: Request):
     with db_session() as conn:
         lookups = lookups_by_type(conn)
         suggested = next_short_code(conn)
-        grouping_options = _grouping_options(conn)
+        grouping_options = _grouping_options()
     blank = {f: "" for f in SUPPLIER_FIELDS}
     blank["country"] = config.DEFAULT_COUNTRY
     blank["status"] = config.DEFAULT_STATUS
@@ -297,7 +287,7 @@ async def create_supplier(
 
     with db_session() as conn:
         lookups = lookups_by_type(conn)
-        grouping_options = _grouping_options(conn, payload.get("tag_1"))
+        grouping_options = _grouping_options(payload.get("tag_1"))
         if not payload.get("short_code"):
             payload["short_code"] = next_short_code(conn)
         errors = validate_supplier_payload(payload, lookups)
@@ -351,7 +341,7 @@ async def create_supplier(
             values,
         )
         supplier_id = cur.lastrowid
-        register_tags(conn, [payload.get(f"tag_{i}") for i in range(1, 5)])
+        register_tags(conn, [payload.get(f"tag_{i}") for i in range(2, 5)])
         upload_errors = await _save_uploads(conn, supplier_id, user["id"], files, attachment_type)
 
     if upload_errors:
@@ -383,7 +373,7 @@ def view_supplier(request: Request, supplier_id: int):
             ]
         )
         uploader_ids = [a.get("uploaded_by") for a in attachments]
-        unames = _username_map(
+        unames = username_map(
             conn, supplier.get("created_by"), supplier.get("updated_by"), *uploader_ids
         )
         supplier["created_by_name"] = first_name_from_username(
@@ -425,7 +415,7 @@ def edit_supplier_form(request: Request, supplier_id: int):
             return RedirectResponse(url="/", status_code=303)
         lookups = lookups_by_type(conn)
         supplier = dict(row)
-        grouping_options = _grouping_options(conn, supplier.get("tag_1"))
+        grouping_options = _grouping_options(supplier.get("tag_1"))
         attachments = [
             dict(a)
             for a in conn.execute(
@@ -494,7 +484,7 @@ async def update_supplier(
             flash(request, "Supplier not found.", "error")
             return RedirectResponse(url="/", status_code=303)
         lookups = lookups_by_type(conn)
-        grouping_options = _grouping_options(conn, payload.get("tag_1"))
+        grouping_options = _grouping_options(payload.get("tag_1"))
         errors = validate_supplier_payload(payload, lookups)
         if payload.get("short_code"):
             clash = conn.execute(
@@ -556,7 +546,7 @@ async def update_supplier(
             f"UPDATE suppliers SET {sets}, updated_at = ?, updated_by = ? WHERE id_supplier = ?",
             values,
         )
-        register_tags(conn, [payload.get(f"tag_{i}") for i in range(1, 5)])
+        register_tags(conn, [payload.get(f"tag_{i}") for i in range(2, 5)])
         upload_errors = await _save_uploads(conn, supplier_id, user["id"], files, attachment_type)
 
     if upload_errors:
@@ -576,8 +566,8 @@ def delete_supplier(request: Request, supplier_id: int, csrf_token: str = Form("
         ).fetchall()
         conn.execute("DELETE FROM suppliers WHERE id_supplier = ?", (supplier_id,))
     for a in atts:
-        path = config.UPLOAD_DIR / a["stored_path"]
-        if path.is_file():
+        path = _resolved_upload_path(a["stored_path"])
+        if path and path.is_file():
             try:
                 path.unlink()
             except OSError:
@@ -597,8 +587,8 @@ def delete_attachment(request: Request, attachment_id: int, csrf_token: str = Fo
             return RedirectResponse(url="/", status_code=303)
         supplier_id = row["supplier_id"]
         conn.execute("DELETE FROM attachments WHERE id = ?", (attachment_id,))
-    path = config.UPLOAD_DIR / row["stored_path"]
-    if path.is_file():
+    path = _resolved_upload_path(row["stored_path"])
+    if path and path.is_file():
         try:
             path.unlink()
         except OSError:
@@ -617,8 +607,8 @@ def download_attachment(request: Request, attachment_id: int):
     if not row:
         flash(request, "Attachment not found.", "error")
         return RedirectResponse(url="/", status_code=303)
-    path = config.UPLOAD_DIR / row["stored_path"]
-    if not path.is_file():
+    path = _resolved_upload_path(row["stored_path"])
+    if not path or not path.is_file():
         flash(request, "File missing on disk.", "error")
         return RedirectResponse(url="/", status_code=303)
     return FileResponse(
@@ -639,8 +629,8 @@ def preview_attachment(request: Request, attachment_id: int):
     if not row:
         flash(request, "Attachment not found.", "error")
         return RedirectResponse(url="/", status_code=303)
-    path = config.UPLOAD_DIR / row["stored_path"]
-    if not path.is_file():
+    path = _resolved_upload_path(row["stored_path"])
+    if not path or not path.is_file():
         flash(request, "File missing on disk.", "error")
         return RedirectResponse(url="/", status_code=303)
     media = row["content_type"] or "application/octet-stream"
@@ -650,6 +640,24 @@ def preview_attachment(request: Request, attachment_id: int):
         filename=row["filename"],
         content_disposition_type="inline",
     )
+
+
+
+def _resolved_upload_path(stored_path: str) -> Path | None:
+    """Resolve attachment path under UPLOAD_DIR; reject traversal / absolute paths."""
+    raw = (stored_path or "").strip()
+    if not raw:
+        return None
+    rel = Path(raw)
+    if rel.is_absolute() or ".." in rel.parts:
+        return None
+    base = config.UPLOAD_DIR.resolve()
+    full = (base / rel).resolve()
+    try:
+        full.relative_to(base)
+    except ValueError:
+        return None
+    return full
 
 
 async def _save_uploads(conn, supplier_id: int, user_id: int, files, attachment_type: str) -> list[str]:
@@ -677,7 +685,10 @@ async def _save_uploads(conn, supplier_id: int, user_id: int, files, attachment_
         if size > config.MAX_UPLOAD_BYTES:
             errors.append(f"{original}: exceeds 15 MB limit")
             continue
-        ctype = f.content_type or ""
+        ctype = (f.content_type or "").strip().lower()
+        if ctype and ctype not in config.ALLOWED_UPLOAD_MIME and ctype != "application/octet-stream":
+            errors.append(f"{original}: content type not allowed")
+            continue
         stored_name = f"{uuid.uuid4().hex}{ext}"
         rel_path = f"{supplier_id}/{stored_name}"
         (config.UPLOAD_DIR / rel_path).write_bytes(content)

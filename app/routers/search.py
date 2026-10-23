@@ -17,14 +17,15 @@ from app.database import (
     db_session,
     format_audit_display,
     get_grouping_options,
+    get_user_columns,
     lookups_by_type,
     supplier_tags_display,
+    username_map,
     utc_now,
 )
 from app.deps import (
     current_user,
     flash,
-    load_visible_columns,
     login_redirect,
     render,
     require_csrf,
@@ -83,7 +84,6 @@ def _filters_from_request(request: Request) -> dict:
         if v:
             out[k] = v
     return out
-
 
 
 FILTER_TO_COLUMN = {
@@ -147,18 +147,12 @@ def _filter_query_string(filters: dict, sort: str | None = None, dir: str | None
     return urlencode(params)
 
 
-def _username_map(conn, rows: list[dict]) -> dict[int, str]:
-    ids = {r.get("created_by") for r in rows} | {r.get("updated_by") for r in rows}
-    ids = [i for i in ids if i]
-    if not ids:
-        return {}
-    placeholders = ",".join("?" * len(ids))
-    return {
-        r["id"]: r["username"]
-        for r in conn.execute(
-            f"SELECT id, username FROM users WHERE id IN ({placeholders})", ids
-        ).fetchall()
-    }
+def _usernames_for_rows(conn, rows: list[dict]) -> dict[int, str]:
+    return username_map(
+        conn,
+        *[r.get("created_by") for r in rows],
+        *[r.get("updated_by") for r in rows],
+    )
 
 
 def _run_search(
@@ -176,7 +170,7 @@ def _run_search(
                 params,
             ).fetchall()
         ]
-        unames = _username_map(conn, rows)
+        unames = _usernames_for_rows(conn, rows)
     out = []
     for r in rows:
         item = {**r, "tags": supplier_tags_display(r)}
@@ -214,7 +208,7 @@ def search_page(request: Request):
             except Exception:
                 d["filters"] = {}
             saved.append(d)
-    visible = _visible_columns_with_filters(load_visible_columns(user["id"]), filters)
+        visible = _visible_columns_with_filters(get_user_columns(conn, user["id"]), filters)
     active_filters = [
         {"key": k, "label": FILTER_LABELS.get(k, k), "value": filters[k]}
         for k in FILTER_KEYS

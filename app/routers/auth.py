@@ -1,11 +1,13 @@
 """Login / logout routes."""
 from __future__ import annotations
 
+import secrets
+
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse
 
 from app.database import db_session, verify_password
-from app.deps import current_user, flash, get_csrf_token, render, require_csrf
+from app.deps import current_user, flash, render, require_csrf
 
 router = APIRouter(tags=["auth"])
 
@@ -34,8 +36,8 @@ def login_submit(
         flash(request, "Invalid username or password.", "error")
         return render(request, "login.html", {"username": username}, status_code=401)
 
-    # Rotate CSRF on login
-    request.session["csrf_token"] = get_csrf_token(request)
+    # Rotate CSRF on login (must mint a new token, not reuse get_csrf_token)
+    request.session["csrf_token"] = secrets.token_urlsafe(32)
     request.session["user"] = {
         "id": row["id"],
         "username": row["username"],

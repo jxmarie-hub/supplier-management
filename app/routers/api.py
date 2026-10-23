@@ -10,6 +10,12 @@ from app.deps import current_user
 router = APIRouter(prefix="/api", tags=["api"])
 
 
+def _like_contains(q: str) -> str:
+    """SQL LIKE substring pattern; use with ESCAPE '\\'."""
+    escaped = q.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
+    return f"%{escaped}%"
+
+
 @router.get("/tags")
 def tag_suggestions(request: Request, q: str = Query("", max_length=100)):
     user = current_user(request)
@@ -18,7 +24,7 @@ def tag_suggestions(request: Request, q: str = Query("", max_length=100)):
     q = (q or "").strip()
     if len(q) < 1:
         return {"tags": []}
-    like = f"%{q}%"
+    like = _like_contains(q)
     with db_session() as conn:
         # Live Tag 2–4 only — never orphan known_tags or Grouping (tag_1)
         rows = conn.execute(
@@ -33,7 +39,7 @@ def tag_suggestions(request: Request, q: str = Query("", max_length=100)):
                 SELECT tag_4 FROM suppliers
                 WHERE tag_4 IS NOT NULL AND TRIM(tag_4) != ''
             )
-            WHERE tag LIKE ? COLLATE NOCASE
+            WHERE tag LIKE ? ESCAPE '\\' COLLATE NOCASE
             ORDER BY tag COLLATE NOCASE
             LIMIT 20
             """,

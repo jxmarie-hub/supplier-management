@@ -4,3 +4,7 @@ __pycache__
 .git
 *.tar.gz
 reference
+data/*.db
+data/*.db-journal
+uploads/*
+!uploads/.gitkeep

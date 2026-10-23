@@ -12,6 +12,7 @@ function initConditionalFields() {
       if (province.value === "N/A") province.value = "";
     } else {
       province.value = "N/A";
+      province.disabled = true;  // not submitted; server sets N/A for non-China
     }
   }
 
@@ -217,6 +218,8 @@ function initSupplierFormValidation() {
 
 
 document.addEventListener("DOMContentLoaded", () => {
+  if (document.body.dataset.appInited === "1") return;
+  document.body.dataset.appInited = "1";
   initConditionalFields();
   initTagAutocomplete();
   initTagSimilarityCheck();

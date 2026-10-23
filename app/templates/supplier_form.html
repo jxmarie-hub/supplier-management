@@ -258,6 +258,7 @@
   <div class="bar">
     {% if mode == 'edit' %}
     <button type="submit" formaction="/suppliers/{{ supplier.id_supplier }}/delete"
+            formnovalidate
             class="btn btn-danger"
             onclick="return confirm('Delete this supplier permanently?');">Delete</button>
     <a href="/suppliers/{{ supplier.id_supplier }}" class="btn">Cancel</a>
@@ -277,7 +278,7 @@
     <li class="att-card">
       <div class="att-meta">
         <strong>{{ a.filename }}</strong>
-        <span class="badge">{{ a.attachment_type }}</span>
+        <span class="badge">{{ attachment_type_labels.get(a.attachment_type, a.attachment_type) }}</span>
         <span class="muted">{{ (a.size_bytes / 1024)|round(1) }} KB</span>
         <a class="btn btn-ghost btn-sm" href="/attachments/{{ a.id }}/download">Download</a>
         <form method="post" action="/attachments/{{ a.id }}/delete" class="inline">
@@ -300,13 +301,4 @@
   </div>
 </section>
 {% endif %}
-{% endblock %}
-
-{% block scripts %}
-<script>
-  initConditionalFields();
-  initTagAutocomplete();
-  initTagSimilarityCheck();
-  initSupplierFormValidation();
-</script>
 {% endblock %}
