@@ -51,29 +51,20 @@
           </select>
         </div>
         <div>
+          <label>CN Province</label>
+          <select class="input-lg" name="cn_province">
+            <option value="">Any</option>
+            {% for v in lookups.cn_province %}
+            <option value="{{ v }}" {% if filters.cn_province == v %}selected{% endif %}>{{ v }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
           <label>Interest</label>
           <select class="input-lg" name="interest_level">
             <option value="">Any</option>
             {% for v in interest_level_values %}
             <option value="{{ v }}" {% if filters.interest_level == v %}selected{% endif %}>{{ v }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div>
-          <label>Grouping</label>
-          <select class="input-lg" name="grouping">
-            <option value="">Any</option>
-            {% for v in grouping_options %}
-            <option value="{{ v }}" {% if filters.grouping == v %}selected{% endif %}>{{ v }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div>
-          <label>Status</label>
-          <select class="input-lg" name="status">
-            <option value="">Any</option>
-            {% for st in status_values %}
-            <option value="{{ st }}" {% if filters.status == st %}selected{% endif %}>{{ st }}</option>
             {% endfor %}
           </select>
         </div>
@@ -96,17 +87,21 @@
           </select>
         </div>
         <div>
-          <label>Meet</label>
-          <select class="input-lg" name="meet">
+          <label>Grouping</label>
+          <select class="input-lg" name="grouping">
             <option value="">Any</option>
-            {% for v in lookups.meet %}
-            <option value="{{ v }}" {% if filters.meet == v %}selected{% endif %}>{{ v }}</option>
+            {% for v in grouping_options %}
+            <option value="{{ v }}" {% if filters.grouping == v %}selected{% endif %}>{{ v }}</option>
             {% endfor %}
           </select>
         </div>
+        <div>
+          <label>Tags</label>
+          <input class="input-lg" name="tag" value="{{ filters.tag }}" placeholder="*LED*">
+        </div>
       </div>
 
-      {% set adv_open = filters.factory_trading_name or filters.contact_name or filters.email or filters.city or filters.website or filters.tel_whatsapp_wechat or filters.notes or filters.cn_province or filters.production_method or filters.tag %}
+      {% set adv_open = filters.factory_trading_name or filters.contact_name or filters.email or filters.city or filters.website or filters.tel_whatsapp_wechat or filters.notes or filters.production_method or filters.status or filters.meet %}
       <details class="advanced-toggle" {% if adv_open %}open{% endif %}>
         <summary>Advanced search — all master-data fields</summary>
         <div class="advanced-body">
@@ -136,11 +131,20 @@
               <input class="input-lg" name="city" value="{{ filters.city }}">
             </div>
             <div>
-              <label>CN Province</label>
-              <select class="input-lg" name="cn_province">
+              <label>Status</label>
+              <select class="input-lg" name="status">
                 <option value="">Any</option>
-                {% for v in lookups.cn_province %}
-                <option value="{{ v }}" {% if filters.cn_province == v %}selected{% endif %}>{{ v }}</option>
+                {% for st in status_values %}
+                <option value="{{ st }}" {% if filters.status == st %}selected{% endif %}>{{ st }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label>Meet</label>
+              <select class="input-lg" name="meet">
+                <option value="">Any</option>
+                {% for v in lookups.meet %}
+                <option value="{{ v }}" {% if filters.meet == v %}selected{% endif %}>{{ v }}</option>
                 {% endfor %}
               </select>
             </div>
@@ -152,10 +156,6 @@
                 <option value="{{ v }}" {% if filters.production_method == v %}selected{% endif %}>{{ v }}</option>
                 {% endfor %}
               </select>
-            </div>
-            <div>
-              <label>Tags (any of Tag 2–4 / free text)</label>
-              <input class="input-lg" name="tag" value="{{ filters.tag }}" placeholder="*LED*">
             </div>
             <div>
               <label>Notes</label>
@@ -222,13 +222,18 @@
   </form>
 </details>
 
-<p class="sub" style="margin:0 0 6px">Use the dropdown under each column to filter the result board (Excel-style).</p>
+<p class="sub" style="margin:0 0 6px">Click a column header to sort ascending/descending. Use the dropdown under each column to filter the result board (Excel-style).</p>
 <div class="table-wrap">
   <table class="data-table filterable" id="search-results-table">
     <thead>
       <tr>
         {% for key in visible_columns %}
-          <th>{{ column_labels.get(key, key) }}</th>
+          {% set next_dir = 'desc' if sort == key and dir == 'asc' else 'asc' %}
+          <th>
+            <a href="/search?{% if filter_qs %}{{ filter_qs }}&{% endif %}sort={{ key }}&dir={{ next_dir }}">
+              {{ column_labels.get(key, key) }}{% if sort == key %} {% if dir == 'asc' %}↑{% else %}↓{% endif %}{% endif %}
+            </a>
+          </th>
         {% endfor %}
         <th class="no-filter"></th>
       </tr>

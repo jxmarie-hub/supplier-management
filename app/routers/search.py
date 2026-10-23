@@ -121,11 +121,41 @@ def _visible_columns_with_filters(user_columns: list[str], filters: dict) -> lis
     return out
 
 
-def _run_search(filters: dict) -> list[dict]:
+def _resolve_sort(sort: str, dir: str) -> tuple[str, str, str]:
+    """Return (sort_key, sql_column, direction ASC|DESC). tags → tag_1 like Home."""
+    if sort == "tags":
+        sort_col = "tag_1"
+        sort_key = "tags"
+    elif sort in {c[0] for c in config.ALL_COLUMNS}:
+        sort_col = sort
+        sort_key = sort
+    else:
+        sort_col = "factory_trading_name"
+        sort_key = "factory_trading_name"
+    direction = "DESC" if (dir or "").lower() == "desc" else "ASC"
+    return sort_key, sort_col, direction
+
+
+def _filter_query_string(filters: dict, sort: str | None = None, dir: str | None = None) -> str:
+    """Build query string from active filters (+ optional sort/dir) for sort/export links."""
+    params = {k: filters[k] for k in FILTER_KEYS if filters.get(k)}
+    if sort:
+        params["sort"] = sort
+    if dir:
+        params["dir"] = dir
+    return urlencode(params)
+
+
+def _run_search(
+    filters: dict,
+    sort: str = "factory_trading_name",
+    dir: str = "asc",
+) -> list[dict]:
     where, params = build_search_where(filters)
+    sort_key, sort_col, direction = _resolve_sort(sort, dir)
     with db_session() as conn:
         rows = conn.execute(
-            f"SELECT * FROM suppliers WHERE {where} ORDER BY factory_trading_name COLLATE NOCASE",
+            f"SELECT * FROM suppliers WHERE {where} ORDER BY {sort_col} COLLATE NOCASE {direction}",
             params,
         ).fetchall()
     return [{**dict(r), "tags": supplier_tags_display(dict(r))} for r in rows]
@@ -137,7 +167,11 @@ def search_page(request: Request):
     if not user:
         return login_redirect()
     filters = _filters_from_request(request)
-    results = _run_search(filters) if filters else []
+    sort_param = request.query_params.get("sort", "factory_trading_name")
+    dir_param = request.query_params.get("dir", "asc")
+    sort_key, _sort_col, direction = _resolve_sort(sort_param, dir_param)
+    dir_out = "desc" if direction == "DESC" else "asc"
+    results = _run_search(filters, sort=sort_key, dir=dir_out) if filters else []
     with db_session() as conn:
         lookups = lookups_by_type(conn)
         saved = []
@@ -157,6 +191,7 @@ def search_page(request: Request):
         for k in FILTER_KEYS
         if filters.get(k)
     ]
+    filter_qs = _filter_query_string(filters)
     return render(
         request,
         "search.html",
@@ -174,6 +209,9 @@ def search_page(request: Request):
             "visible_columns": visible,
             "column_labels": dict(config.ALL_COLUMNS),
             "all_columns": config.ALL_COLUMNS,
+            "sort": sort_key,
+            "dir": dir_out,
+            "filter_qs": filter_qs,
             "nav_active": "search",
         },
     )
@@ -190,15 +228,15 @@ def _cell_value_for_export(supplier: dict, key: str):
 
 @router.get("/search/export")
 def export_search(request: Request):
-    """Excel export: same columns as search results, AutoFilter on, widths fitted."""
+    """Excel export: all ALL_COLUMNS fields for the filtered result set; AutoFilter on, widths fitted."""
     user = current_user(request)
     if not user:
         return login_redirect()
     filters = _filters_from_request(request)
     results = _run_search(filters)
-    visible = _visible_columns_with_filters(load_visible_columns(user["id"]), filters)
-    labels = dict(config.ALL_COLUMNS)
-    headers = [labels.get(k, k) for k in visible]
+    # Every supplier field (ALL_COLUMNS order). Never include numeric id_supplier.
+    export_keys = [k for k, _ in config.ALL_COLUMNS]
+    headers = [label for _, label in config.ALL_COLUMNS]
 
     wb = Workbook()
     ws = wb.active
@@ -208,7 +246,7 @@ def export_search(request: Request):
         cell.font = Font(bold=True)
 
     for s in results:
-        ws.append([_cell_value_for_export(s, key) for key in visible])
+        ws.append([_cell_value_for_export(s, key) for key in export_keys])
 
     # AutoFilter on header row (ready for Excel column filters)
     last_row = max(1, len(results) + 1)

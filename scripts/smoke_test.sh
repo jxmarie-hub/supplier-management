@@ -101,20 +101,59 @@ echo "$SR" | grep -q 'data-table filterable'
 echo "$SR" | grep -q 'initColumnFilters'
 echo "search_column_filters_markup_ok"
 
-echo "== Export =="
+echo "== Standard search fields (default form) =="
+# Empty search page: standard fields present outside Advanced
+EMPTY=$(curl -fsS -c "$COOKIE" -b "$COOKIE" "$BASE/search")
+# Grab the main filters block before Advanced details
+MAIN=$(echo "$EMPTY" | sed -n '/id="search-form"/,/Advanced search/p')
+echo "$MAIN" | grep -q 'name="q"'
+echo "$MAIN" | grep -q 'name="country"'
+echo "$MAIN" | grep -q 'name="cn_province"'
+echo "$MAIN" | grep -q 'name="interest_level"'
+echo "$MAIN" | grep -q 'name="nature_of_product"'
+echo "$MAIN" | grep -q 'name="item_group_name"'
+echo "$MAIN" | grep -q 'name="grouping"'
+echo "$MAIN" | grep -q 'name="tag"'
+# Status + Meet only under Advanced
+ADV=$(echo "$EMPTY" | sed -n '/Advanced search/,/<\/details>/p')
+echo "$ADV" | grep -q 'name="status"'
+echo "$ADV" | grep -q 'name="meet"'
+# Status/Meet should NOT appear before Advanced in the simple filters
+# (count name="status" in MAIN should be 0)
+! echo "$MAIN" | grep -q 'name="status"'
+! echo "$MAIN" | grep -q 'name="meet"'
+echo "standard_search_fields_ok"
+
+echo "== Search column sort (asc/desc like Home) =="
+# default sort factory_trading_name asc → arrow ↑ and toggle to desc
+echo "$SR" | grep -q 'sort=factory_trading_name&dir=desc'
+echo "$SR" | grep -q '↑'
+SR_DESC=$(curl -fsS -c "$COOKIE" -b "$COOKIE" "$BASE/search?q=${SMOKE_NAME// /+}&sort=factory_trading_name&dir=desc")
+echo "$SR_DESC" | grep -q 'sort=factory_trading_name&dir=asc'
+echo "$SR_DESC" | grep -q '↓'
+# sort link keeps filter params
+echo "$SR_DESC" | grep -qE 'href="/search\?[^"]*q='
+echo "search_column_sort_ok"
+
+echo "== Export (all ALL_COLUMNS fields) =="
 curl -fsS -c "$COOKIE" -b "$COOKIE" "$BASE/search/export?country=China" -o /tmp/sm_export.xlsx
-python3 - <<'PY'
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+(cd "$ROOT" && PYTHONPATH="$ROOT" python3 - <<'PY'
 from openpyxl import load_workbook
+from app import config
 wb=load_workbook('/tmp/sm_export.xlsx')
 ws=wb.active
 assert ws.max_row >= 2
 assert ws.auto_filter.ref, 'AutoFilter missing'
 assert ws.freeze_panes == 'A2'
 headers=[c.value for c in ws[1]]
-assert headers, 'no headers'
+expected=[label for _, label in config.ALL_COLUMNS]
+assert headers == expected, f'headers mismatch: got {headers!r} expected {expected!r}'
+assert 'id_supplier' not in [str(h) for h in headers]
 assert ws.column_dimensions['A'].width and ws.column_dimensions['A'].width >= 8
-print('export_rows', ws.max_row, 'cols', len(headers), 'autofilter', ws.auto_filter.ref)
+print('export_rows', ws.max_row, 'cols', len(headers), 'all_fields_ok', 'autofilter', ws.auto_filter.ref)
 PY
+)
 
 echo "== Upload OK via edit =="
 printf '%%PDF-1.1 smoke' > /tmp/sm_ok.pdf
