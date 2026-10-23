@@ -11,6 +11,8 @@ from app import config
 from app.database import (
     db_session,
     find_duplicate_suppliers,
+    first_name_from_username,
+    format_audit_display,
     lookups_by_type,
     next_short_code,
     normalize_supplier_payload,
@@ -65,6 +67,21 @@ def _enrich(supplier: dict) -> dict:
     s = dict(supplier)
     s["tags"] = supplier_tags_display(s)
     return s
+
+
+def _apply_audit_display(rows: list[dict], unames: dict[int, str]) -> list[dict]:
+    """Replace created_at/updated_at with date + first-name for table/Excel display."""
+    out = []
+    for r in rows:
+        s = _enrich(r)
+        s["created_at"] = format_audit_display(
+            r.get("created_at"), unames.get(r.get("created_by"))
+        )
+        s["updated_at"] = format_audit_display(
+            r.get("updated_at"), unames.get(r.get("updated_by"))
+        )
+        out.append(s)
+    return out
 
 
 def _tag_resolve_map(
@@ -173,12 +190,17 @@ def home(
     with db_session() as conn:
         rows = [dict(r) for r in conn.execute(sql).fetchall()]
         visible = load_visible_columns(user["id"])
+        unames = _username_map(
+            conn,
+            *[r.get("created_by") for r in rows],
+            *[r.get("updated_by") for r in rows],
+        )
 
     return render(
         request,
         "home.html",
         {
-            "suppliers": [_enrich(r) for r in rows],
+            "suppliers": _apply_audit_display(rows, unames),
             "sort": sort,
             "dir": "desc" if direction == "DESC" else "asc",
             "visible_columns": visible,
@@ -364,8 +386,18 @@ def view_supplier(request: Request, supplier_id: int):
         unames = _username_map(
             conn, supplier.get("created_by"), supplier.get("updated_by"), *uploader_ids
         )
-        supplier["created_by_name"] = unames.get(supplier.get("created_by"), "—")
-        supplier["updated_by_name"] = unames.get(supplier.get("updated_by"), "—")
+        supplier["created_by_name"] = first_name_from_username(
+            unames.get(supplier.get("created_by"))
+        ) or "—"
+        supplier["updated_by_name"] = first_name_from_username(
+            unames.get(supplier.get("updated_by"))
+        ) or "—"
+        supplier["created_display"] = format_audit_display(
+            supplier.get("created_at"), unames.get(supplier.get("created_by"))
+        ) or "—"
+        supplier["updated_display"] = format_audit_display(
+            supplier.get("updated_at"), unames.get(supplier.get("updated_by"))
+        ) or "—"
         for a in attachments:
             a["uploaded_by_name"] = unames.get(a.get("uploaded_by"), "—")
 

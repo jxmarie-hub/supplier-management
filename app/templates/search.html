@@ -4,7 +4,7 @@
 {% block content %}
 
 <div class="page-head">
-  <h1>{% if searched %}{{ results|length }} result(s)<span id="result-filter-count" class="muted" style="font-weight:500;font-size:13px"></span>{% else %}Search{% endif %}</h1>
+  <h1>{% if searched %}{{ results|length }} result(s){% else %}Search{% endif %}</h1>
   {% if searched %}
   <div class="row-actions">
     <a class="btn" href="/search">Clear filters</a>
@@ -222,9 +222,9 @@
   </form>
 </details>
 
-<p class="sub" style="margin:0 0 6px">Click a column header to sort ascending/descending. Use the dropdown under each column to filter the result board (Excel-style).</p>
+<p class="sub" style="margin:0 0 6px">Click a column header to sort ascending/descending.</p>
 <div class="table-wrap">
-  <table class="data-table filterable" id="search-results-table">
+  <table class="data-table" id="search-results-table">
     <thead>
       <tr>
         {% for key in visible_columns %}
@@ -235,7 +235,7 @@
             </a>
           </th>
         {% endfor %}
-        <th class="no-filter"></th>
+        <th></th>
       </tr>
     </thead>
     <tbody>
@@ -275,6 +275,5 @@
 {% block scripts %}
 <script>
   initClickableRows();
-  initColumnFilters("#search-results-table");
 </script>
 {% endblock %}

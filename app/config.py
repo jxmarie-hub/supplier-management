@@ -29,41 +29,30 @@ DEFAULT_COUNTRY = "China"
 DEFAULT_STATUS = "Prospect"
 NOTES_MAX_LEN = 200
 
-# Default home-table columns (keys match supplier attribute names)
-DEFAULT_VISIBLE_COLUMNS = [
-    "short_code",
-    "factory_trading_name",
-    "contact_name",
-    "email",
-    "country",
-    "status",
-    "nature_of_product",
-    "tags",
-    "notes",
-]
-
-# All columns available in the column picker
+# Default home-table columns = all fields in Jean's display order
 ALL_COLUMNS = [
     ("short_code", "Code"),
     ("status", "Status"),
-    ("interest_level", "Interest level"),
-    ("meet", "Meet"),
+    ("interest_level", "Interest Level"),
+    ("factory_trading_name", "Factory Name"),
     ("country", "Country"),
     ("cn_province", "CN Province"),
     ("city", "City"),
-    ("factory_trading_name", "Factory Name"),
-    ("website", "Website"),
-    ("contact_name", "Contact name"),
-    ("email", "Email"),
-    ("tel_whatsapp_wechat", "Tel / WhatsApp / WeChat"),
-    ("nature_of_product", "Nature of Product"),
+    ("nature_of_product", "Nature of product"),
+    ("production_method", "Production Method"),
     ("item_group_name", "Item Group"),
-    ("production_method", "Production method"),
     ("tags", "Grouping / Tags"),
+    ("meet", "Meet"),
+    ("contact_name", "Contact Name"),
+    ("email", "Email"),
+    ("website", "Website"),
+    ("tel_whatsapp_wechat", "Tel"),
     ("notes", "Notes"),
     ("created_at", "Created"),
     ("updated_at", "Updated"),
 ]
+
+DEFAULT_VISIBLE_COLUMNS = [key for key, _label in ALL_COLUMNS]
 
 STATUS_VALUES = ["Current", "Prospect", "Inactive"]
 

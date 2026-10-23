@@ -112,9 +112,12 @@ SR=$(curl -fsS -c "$COOKIE" -b "$COOKIE" "$BASE/search?q=${SMOKE_NAME// /+}")
 echo "$SR" | grep -q "$SMOKE_NAME"
 echo "$SR" | grep -q 'id="search-form"'
 echo "$SR" | grep -q "Run search"
-echo "$SR" | grep -q 'data-table filterable'
-echo "$SR" | grep -q 'initColumnFilters'
-echo "search_column_filters_markup_ok"
+# No Excel-style per-column "All" filters; keep header sort only
+! echo "$SR" | grep -q 'data-table filterable'
+! echo "$SR" | grep -q 'initColumnFilters'
+! echo "$SR" | grep -q 'col-filter'
+echo "$SR" | grep -q 'Click a column header to sort'
+echo "search_sort_only_ok"
 
 echo "== Standard search fields (default form) =="
 # Empty search page: standard fields present outside Advanced
@@ -166,6 +169,17 @@ expected=[label for _, label in config.ALL_COLUMNS]
 assert headers == expected, f'headers mismatch: got {headers!r} expected {expected!r}'
 assert 'id_supplier' not in [str(h) for h in headers]
 assert ws.column_dimensions['A'].width and ws.column_dimensions['A'].width >= 8
+# Created/Updated columns should be date + first name (no HH:MM)
+created_idx = headers.index('Created') + 1
+updated_idx = headers.index('Updated') + 1
+for row in ws.iter_rows(min_row=2, max_row=min(ws.max_row, 5)):
+    for idx in (created_idx, updated_idx):
+        val = row[idx - 1].value
+        if not val:
+            continue
+        s = str(val)
+        assert len(s) >= 10 and s[4] == '-', s
+        assert ':' not in s, f'time still in export: {s!r}'
 print('export_rows', ws.max_row, 'cols', len(headers), 'all_fields_ok', 'autofilter', ws.auto_filter.ref)
 PY
 )
@@ -251,10 +265,40 @@ grep -qi "duplicate" /tmp/sm_dup.html && echo "dup_warn_ok"
 echo "== Admin lookups =="
 curl -fsS -c "$COOKIE" -b "$COOKIE" "$BASE/admin/lookups?type=meet" | grep -q "Alibaba"
 
+echo "== Supplier view audit date + first name =="
+VIEW=$(curl -fsS -c "$COOKIE" -b "$COOKIE" "$BASE/suppliers/$SID")
+echo "$VIEW" | grep -E -q "[0-9]{4}-[0-9]{2}-[0-9]{2} (admin|Utilisateur)"
+! echo "$VIEW" | grep -A2 'view-label">Created' | grep -E -q "[0-9]{2}:[0-9]{2}:[0-9]{2}"
+echo "audit_display_ok"
+
 echo "== Delete supplier =="
 CSRF=$(curl -fsS -c "$COOKIE" -b "$COOKIE" "$BASE/suppliers/$SID/edit" | sed -n 's/.*name="csrf_token" value="\([^"]*\)".*/\1/p' | head -1)
 curl -fsS -c "$COOKIE" -b "$COOKIE" -X POST "$BASE/suppliers/$SID/delete" \
   -d "csrf_token=$CSRF" -o /dev/null -w "delete=%{http_code}\n" -D /tmp/sm_del.txt
 grep -qi 'location:' /tmp/sm_del.txt
+
+echo "== Home default shows all columns in Jean order =="
+curl -fsS -c "$COOKIE" -b "$COOKIE" "$BASE/" -o /tmp/sm_home_cols.html
+python3 - <<'PY'
+from pathlib import Path
+import re
+html = Path("/tmp/sm_home_cols.html").read_text()
+labels = re.findall(r"<th>\s*<a[^>]*>\s*([^<↑↓]+)", html)
+labels = [l.strip() for l in labels]
+expected = [
+    "Code", "Status", "Interest Level", "Factory Name", "Country", "CN Province", "City",
+    "Nature of product", "Production Method", "Item Group", "Grouping / Tags", "Meet",
+    "Contact Name", "Email", "Website", "Tel", "Notes", "Created", "Updated",
+]
+assert labels[: len(expected)] == expected, labels
+assert not re.search(r">\d{4}-\d{2}-\d{2} \d{2}:\d{2}", html), "hour still shown on home"
+print("home_all_columns_order_ok")
+PY
+
+echo "== Grouping list has Animal Husbandry / Fencing =="
+CREATE_HTML=$(curl -fsS -c "$COOKIE" -b "$COOKIE" "$BASE/suppliers/new")
+echo "$CREATE_HTML" | grep -q "Animal Husbandry / Fencing"
+! echo "$CREATE_HTML" | grep -q 'option value="Fencing"'
+echo "grouping_rename_ok"
 
 echo "ALL SMOKE CHECKS PASSED"

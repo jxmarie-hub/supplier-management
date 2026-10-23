@@ -405,30 +405,6 @@ a.btn-danger:hover,
 }
 .data-table th a { color: inherit; }
 
-/* Search result board — Excel-like per-column filters */
-.col-filter-row th,
-.col-filter-cell {
-  background: #f8fafc;
-  padding: 4px 6px;
-  border-bottom: 1px solid var(--border);
-  vertical-align: middle;
-}
-.col-filter-select {
-  width: 100%;
-  min-width: 72px;
-  max-width: 160px;
-  min-height: 28px;
-  padding: 2px 4px;
-  font-size: 11px;
-  border: 1px solid var(--border-input);
-  border-radius: var(--radius);
-  background: #fff;
-  color: var(--text);
-}
-.col-filter-select:focus {
-  outline: 2px solid #99f6e4;
-  border-color: var(--primary);
-}
 label .req, .req {
   color: #b91c1c;
   font-weight: 700;

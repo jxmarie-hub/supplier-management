@@ -15,6 +15,7 @@ from app import config
 from app.database import (
     build_search_where,
     db_session,
+    format_audit_display,
     get_grouping_options,
     lookups_by_type,
     supplier_tags_display,
@@ -146,6 +147,20 @@ def _filter_query_string(filters: dict, sort: str | None = None, dir: str | None
     return urlencode(params)
 
 
+def _username_map(conn, rows: list[dict]) -> dict[int, str]:
+    ids = {r.get("created_by") for r in rows} | {r.get("updated_by") for r in rows}
+    ids = [i for i in ids if i]
+    if not ids:
+        return {}
+    placeholders = ",".join("?" * len(ids))
+    return {
+        r["id"]: r["username"]
+        for r in conn.execute(
+            f"SELECT id, username FROM users WHERE id IN ({placeholders})", ids
+        ).fetchall()
+    }
+
+
 def _run_search(
     filters: dict,
     sort: str = "factory_trading_name",
@@ -154,11 +169,25 @@ def _run_search(
     where, params = build_search_where(filters)
     sort_key, sort_col, direction = _resolve_sort(sort, dir)
     with db_session() as conn:
-        rows = conn.execute(
-            f"SELECT * FROM suppliers WHERE {where} ORDER BY {sort_col} COLLATE NOCASE {direction}",
-            params,
-        ).fetchall()
-    return [{**dict(r), "tags": supplier_tags_display(dict(r))} for r in rows]
+        rows = [
+            dict(r)
+            for r in conn.execute(
+                f"SELECT * FROM suppliers WHERE {where} ORDER BY {sort_col} COLLATE NOCASE {direction}",
+                params,
+            ).fetchall()
+        ]
+        unames = _username_map(conn, rows)
+    out = []
+    for r in rows:
+        item = {**r, "tags": supplier_tags_display(r)}
+        item["created_at"] = format_audit_display(
+            r.get("created_at"), unames.get(r.get("created_by"))
+        )
+        item["updated_at"] = format_audit_display(
+            r.get("updated_at"), unames.get(r.get("updated_by"))
+        )
+        out.append(item)
+    return out
 
 
 @router.get("/search")

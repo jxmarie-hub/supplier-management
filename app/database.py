@@ -16,6 +16,25 @@ def utc_now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
 
+
+def first_name_from_username(username: str | None) -> str:
+    """First token of username (e.g. 'Jean Marie' → 'Jean'; 'Utilisateur1' as-is)."""
+    value = (username or "").strip()
+    if not value:
+        return ""
+    return value.split()[0]
+
+
+def format_audit_display(ts: str | None, username: str | None = None) -> str:
+    """Date-only + first name for Created/Updated display (DB keeps full timestamps)."""
+    raw = (str(ts).strip() if ts is not None else "")
+    date_part = raw[:10] if raw else ""
+    name = first_name_from_username(username)
+    if date_part and name:
+        return f"{date_part} {name}"
+    return date_part or name or ""
+
+
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
@@ -146,6 +165,8 @@ def init_db() -> None:
         _migrate_schema(conn)
         _seed_if_empty(conn)
         _sync_lookups_from_seed(conn)
+        _migrate_fencing_grouping(conn)
+        _migrate_column_prefs_full(conn)
         # Drop orphan known_tags so Admin list matches live usage;
         # create/edit suggestions already ignore known_tags entirely.
         prune_unused_known_tags(conn)
@@ -156,6 +177,43 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
     cols = {row[1] for row in conn.execute("PRAGMA table_info(suppliers)").fetchall()}
     if "interest_level" not in cols:
         conn.execute("ALTER TABLE suppliers ADD COLUMN interest_level TEXT")
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS app_meta (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        )
+        """
+    )
+
+
+def _migrate_fencing_grouping(conn: sqlite3.Connection) -> None:
+    """Rename Grouping label Fencing → Animal Husbandry / Fencing (UPDATE only)."""
+    conn.execute(
+        "UPDATE suppliers SET tag_1 = ? WHERE tag_1 = ? COLLATE NOCASE",
+        ("Animal Husbandry / Fencing", "Fencing"),
+    )
+
+
+def _migrate_column_prefs_full(conn: sqlite3.Connection) -> None:
+    """One-shot: reset saved column prefs to Jean's full default order."""
+    row = conn.execute(
+        "SELECT value FROM app_meta WHERE key = 'column_prefs_version'"
+    ).fetchone()
+    if row and row["value"] == "full_v1":
+        return
+    payload = json.dumps(list(config.DEFAULT_VISIBLE_COLUMNS))
+    for pref in conn.execute("SELECT user_id FROM user_column_prefs").fetchall():
+        conn.execute(
+            "UPDATE user_column_prefs SET columns_json = ? WHERE user_id = ?",
+            (payload, pref["user_id"]),
+        )
+    conn.execute(
+        """
+        INSERT INTO app_meta (key, value) VALUES ('column_prefs_version', 'full_v1')
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value
+        """
+    )
 
 
 def _load_seed_data() -> dict:
