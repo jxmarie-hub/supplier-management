@@ -704,9 +704,13 @@ def validate_supplier_payload(data: dict[str, Any], lookups: dict[str, list[str]
         errors.append("Interest level must be Must visit, Interesting, or In Case.")
 
     grouping = (data.get("tag_1") or "").strip()
-    if not grouping:
-        errors.append("Grouping is required.")
-    elif grouping not in get_grouping_options():
+    # Grouping compulsory only for Finish product; optional for OEM
+    if nature == "Finish product":
+        if not grouping:
+            errors.append("Grouping is required when Nature of Product is Finish product.")
+        elif grouping not in get_grouping_options():
+            errors.append("Grouping must be chosen from the list.")
+    elif grouping and grouping not in get_grouping_options():
         errors.append("Grouping must be chosen from the list.")
 
     free_tags = [

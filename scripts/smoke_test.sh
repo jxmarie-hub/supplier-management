@@ -33,8 +33,47 @@ echo "$CREATE_HTML" | grep -A5 'name="status"' | grep -q 'selected.>Prospect<\|s
 echo "$CREATE_HTML" | grep -A20 'name="country"' | head -30 | grep -q 'selected[^>]*>China<'
 echo "$CREATE_HTML" | grep -q 'Nature of Product <span class="req">\*</span>'
 echo "$CREATE_HTML" | grep -q 'name="nature_of_product"[^>]*required\|nature_of_product" id="field-nature" required'
-echo "$CREATE_HTML" | grep -q 'Grouping <span class="req">\*</span>'
+echo "$CREATE_HTML" | grep -q 'id="req-grouping"'
+echo "$CREATE_HTML" | grep -q 'id="hint-grouping"'
+# Grouping select must NOT be always required (only Finish product)
+! echo "$CREATE_HTML" | grep -q 'id="field-grouping" required'
 echo "create_defaults_ok"
+
+echo "== OEM create without Grouping (optional) =="
+CSRF_OEM=$(curl -fsS -c "$COOKIE" -b "$COOKIE" "$BASE/suppliers/new" | sed -n 's/.*name="csrf_token" value="\([^"]*\)".*/\1/p' | head -1)
+curl -sS -c "$COOKIE" -b "$COOKIE" -X POST "$BASE/suppliers/new" \
+  -F "csrf_token=$CSRF_OEM" \
+  -F "short_code=" -F "status=Prospect" -F "interest_level=In Case" -F "meet=" \
+  -F "country=Vietnam" -F "cn_province=N/A" -F "city=HCMC" \
+  -F "factory_trading_name=OEM No Grouping $$" \
+  -F "website=" -F "contact_name=T" -F "email=oem-no-grouping$$@example.com" \
+  -F "tel_whatsapp_wechat=" -F "nature_of_product=OEM" \
+  -F "item_group_name=" -F "production_method=Casting" \
+  -F "tag_1=" -F "tag_2=oem-smoke-tag-$$" -F "tag_3=" -F "tag_4=" \
+  -F "notes=oem without grouping" -F "attachment_type=other" \
+  -F "tag_resolve_1=" -F "tag_resolve_2=keep" -F "tag_resolve_3=" -F "tag_resolve_4=" \
+  -o /dev/null -D /tmp/sm_oem_ng.txt -w "oem_no_grouping=%{http_code}\n"
+grep -qi 'location:' /tmp/sm_oem_ng.txt
+OEM_LOC=$(grep -i '^location:' /tmp/sm_oem_ng.txt | awk '{print $2}' | tr -d '\r')
+OEM_SID=$(echo "$OEM_LOC" | sed -n 's|.*/suppliers/\([0-9]*\).*|\1|p')
+test -n "$OEM_SID"
+# Finish product without Grouping must fail
+CSRF_FP=$(curl -fsS -c "$COOKIE" -b "$COOKIE" "$BASE/suppliers/new" | sed -n 's/.*name="csrf_token" value="\([^"]*\)".*/\1/p' | head -1)
+CODE_FP=$(curl -sS -c "$COOKIE" -b "$COOKIE" -X POST "$BASE/suppliers/new" \
+  -F "csrf_token=$CSRF_FP" \
+  -F "short_code=" -F "status=Prospect" -F "interest_level=In Case" -F "meet=" \
+  -F "country=Vietnam" -F "cn_province=N/A" -F "city=HCMC" \
+  -F "factory_trading_name=Finish No Grouping $$" \
+  -F "website=" -F "contact_name=T" -F "email=finish-no-grouping$$@example.com" \
+  -F "tel_whatsapp_wechat=" -F "nature_of_product=Finish product" \
+  -F "item_group_name=GARDENING MACHINES" -F "production_method=" \
+  -F "tag_1=" -F "tag_2=finish-smoke-tag-$$" -F "tag_3=" -F "tag_4=" \
+  -F "notes=finish without grouping" -F "attachment_type=other" \
+  -F "tag_resolve_1=" -F "tag_resolve_2=keep" -F "tag_resolve_3=" -F "tag_resolve_4=" \
+  -o /tmp/sm_fp_ng.html -w "%{http_code}")
+echo "finish_no_grouping_http=$CODE_FP"
+grep -qi "Grouping is required" /tmp/sm_fp_ng.html
+echo "grouping_conditional_ok"
 
 echo "== Create supplier → read view =="
 curl -sS -c "$COOKIE" -b "$COOKIE" -X POST "$BASE/suppliers/new" \

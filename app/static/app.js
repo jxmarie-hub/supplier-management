@@ -16,11 +16,14 @@ function initConditionalFields() {
   }
 
   const itemGroup = document.getElementById("field-item-group");
+  const grouping = document.getElementById("field-grouping");
   const hintItem = document.getElementById("hint-item-group");
   const hintMethod = document.getElementById("hint-method");
+  const hintGrouping = document.getElementById("hint-grouping");
 
   const reqItem = document.getElementById("req-item-group");
   const reqMethod = document.getElementById("req-method");
+  const reqGrouping = document.getElementById("req-grouping");
 
   function syncNature() {
     const isFinish = nature.value === "Finish product";
@@ -30,8 +33,10 @@ function initConditionalFields() {
     }
     if (hintItem) hintItem.hidden = !isFinish;
     if (hintMethod) hintMethod.hidden = !isOem;
+    if (hintGrouping) hintGrouping.hidden = !isFinish;
     if (reqItem) reqItem.hidden = !isFinish;
     if (reqMethod) reqMethod.hidden = !isOem;
+    if (reqGrouping) reqGrouping.hidden = !isFinish;
     if (itemGroup) {
       if (isFinish) itemGroup.setAttribute("required", "required");
       else itemGroup.removeAttribute("required");
@@ -39,6 +44,10 @@ function initConditionalFields() {
     if (method) {
       if (isOem) method.setAttribute("required", "required");
       else method.removeAttribute("required");
+    }
+    if (grouping) {
+      if (isFinish) grouping.setAttribute("required", "required");
+      else grouping.removeAttribute("required");
     }
   }
 
@@ -168,14 +177,6 @@ function initSupplierFormValidation() {
       if (n) n.focus();
       return;
     }
-    const grouping = (form.querySelector("#field-grouping") || {}).value || "";
-    if (!String(grouping).trim()) {
-      e.preventDefault();
-      alert("Grouping is required.");
-      const g = form.querySelector("#field-grouping");
-      if (g) g.focus();
-      return;
-    }
     const t2 = (form.querySelector("#tag-input-2") || {}).value || "";
     const t3 = (form.querySelector("#tag-input-3") || {}).value || "";
     const t4 = (form.querySelector("#tag-input-4") || {}).value || "";
@@ -194,6 +195,14 @@ function initSupplierFormValidation() {
       alert("Item Group is required when Nature of Product is Finish product.");
       const ig = form.querySelector("#field-item-group");
       if (ig) ig.focus();
+      return;
+    }
+    const groupingVal = (form.querySelector("#field-grouping") || {}).value || "";
+    if (nature === "Finish product" && !String(groupingVal).trim()) {
+      e.preventDefault();
+      alert("Grouping is required when Nature of Product is Finish product.");
+      const g = form.querySelector("#field-grouping");
+      if (g) g.focus();
       return;
     }
     if (nature === "OEM" && !String(method).trim()) {

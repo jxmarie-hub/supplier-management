@@ -13,7 +13,7 @@
   {% endif %}
 </div>
 
-<div class="hint-bar">Validation: Finish product → Item Group · OEM → Production method · Grouping required · ≥1 free Tag</div>
+<div class="hint-bar">Validation: Finish product → Item Group + Grouping · OEM → Production method · ≥1 free Tag</div>
 
 {% if errors %}
 <div class="flash flash-error">
@@ -172,8 +172,8 @@
         </select>
       </div>
       <div>
-        <label>Grouping <span class="req">*</span></label>
-        <select class="input-lg" name="tag_1" id="field-grouping" required>
+        <label>Grouping <span class="req" id="req-grouping" hidden>*</span> <span class="req-hint" id="hint-grouping" hidden>(required for Finish product)</span></label>
+        <select class="input-lg" name="tag_1" id="field-grouping">
           <option value="">Select…</option>
           {% for v in grouping_options %}
           <option value="{{ v }}" {% if supplier.tag_1 == v %}selected{% endif %}>{{ v }}</option>
