@@ -167,6 +167,7 @@ def init_db() -> None:
         _sync_lookups_from_seed(conn)
         _migrate_grouping_list(conn)
         _migrate_column_prefs_full(conn)
+        _migrate_demo_suppliers_v40(conn)
         # Drop orphan known_tags so Admin list matches live usage;
         # create/edit suggestions already ignore known_tags entirely.
         prune_unused_known_tags(conn)
@@ -325,9 +326,9 @@ def _sync_lookups_from_seed(conn: sqlite3.Connection) -> None:
 def _seed_if_empty(conn: sqlite3.Connection) -> None:
     """First-install seed only. Never wipe suppliers on an existing database.
 
-    Sample suppliers (~50) are created only when there are no users yet
+    Sample suppliers (~40) are created only when there are no users yet
     (fresh empty DB). Later startups leave supplier rows untouched — even if
-    the count is below 50 or some rows have incomplete lookup values.
+    the count is below 40 or some rows have incomplete lookup values.
     Lookup dropdown lists are refreshed separately by _sync_lookups_from_seed.
     """
     user_count = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
@@ -381,8 +382,8 @@ def _seed_lookups(conn: sqlite3.Connection) -> None:
             order += 1
 
 
-def _seed_sample_suppliers(conn: sqlite3.Connection) -> None:
-    """Demo set (~50) covering Jean's lookup combinations."""
+def _seed_sample_suppliers(conn: sqlite3.Connection, count: int = 40) -> None:
+    """Demo set (~40) covering Jean's lookup combinations with maximal diversity."""
     now = utc_now()
     admin = conn.execute("SELECT id FROM users WHERE username = 'admin'").fetchone()
     admin_id = admin["id"] if admin else None
@@ -413,7 +414,7 @@ def _seed_sample_suppliers(conn: sqlite3.Connection) -> None:
     free_tag_pool = [
         "cordless", "heavy duty", "OEM grade", "export pack", "CE certified",
         "galvanized", "battery powered", "quick ship", "custom mold", "after sales",
-        "lawn mower", "LED strip", "carbide tip", "PTO shaft", "Inner tube",
+        "lawn mower", "LED strip", "carbide tip", "PTO shaft", "inner tube",
         "workshop bench", "fencing mesh", "plastic housing", "forged head", "CNC part",
     ]
     first_names = [
@@ -429,53 +430,70 @@ def _seed_sample_suppliers(conn: sqlite3.Connection) -> None:
         "Industrial", "Precision", "Export", "Trading", "OEM", "Parts", "Workshop", "Metal",
         "Plastic", "Forge", "Casting", "Electric", "Fence", "Wheel", "Blade", "Power", "Gift",
     ]
+    phone_prefix = {
+        "China": "+86 138",
+        "Taiwan": "+886 9",
+        "Vietnam": "+84 90",
+        "Thailand": "+66 81",
+        "Philippines": "+63 917",
+        "Japan": "+81 90",
+        "India": "+91 98",
+        "Indonesia": "+62 812",
+        "Malaysia": "+60 12",
+        "South Korea": "+82 10",
+        "Hong Kong": "+852 9",
+    }
 
+    # Coprime-ish strides so country/nature/grouping/etc. do not lock-step.
     samples: list[dict] = []
-    for i in range(1, 51):
-        country = countries[(i - 1) % len(countries)]
-        nature = natures[(i - 1) % len(natures)]
-        grouping = groupings[(i - 1) % len(groupings)]
-        meet = meets[(i - 1) % len(meets)]
-        item_group = item_groups[(i - 1) % len(item_groups)]
-        method = methods[(i - 1) % len(methods)]
-        status = statuses[(i - 1) % len(statuses)]
-        interest = interests[(i - 1) % len(interests)]
+    for i in range(1, count + 1):
+        idx = i - 1
+        # Bias toward China (~35%) for CN-province coverage; still hit every Asia country.
+        if idx % 3 == 0:
+            country = "China"
+        else:
+            others = [c for c in countries if c != "China"]
+            country = others[(idx * 3) % len(others)]
+        nature = natures[idx % len(natures)]
+        grouping = groupings[(idx * 5) % len(groupings)]
+        meet = meets[(idx * 7) % len(meets)]
+        item_group = item_groups[(idx * 4) % len(item_groups)]
+        method = methods[(idx * 3) % len(methods)]
+        status = statuses[(idx * 5) % len(statuses)]
+        interest = interests[(idx * 7) % len(interests)]
         cities = city_by_country.get(country, ["City"])
-        city = cities[(i - 1) % len(cities)]
+        city = cities[(idx * 2) % len(cities)]
         if country == "China":
-            cn_province = provinces[(i - 1) % len(provinces)]
+            cn_province = provinces[(idx * 5) % len(provinces)]
         else:
             cn_province = "N/A"
 
-        # Finish product needs item group; clear production method.
-        # OEM needs production method; still set item group for demo coverage.
+        # Finish product: Item Group + Grouping; no production method.
+        # OEM: production method required; Item Group optional; Grouping optional but set for demo coverage.
         if nature == "Finish product":
             production_method = None
             item_group_name = item_group
+            tag_1 = grouping
         else:
             production_method = method
             item_group_name = item_group if i % 3 else None
+            tag_1 = grouping if (idx % 5) else None  # leave some OEM blank (optional)
 
         has_website = i % 3 != 0
         contact_mode = i % 3  # 0 email only, 1 phone only, 2 both
         email = f"sales{i:02d}@demo-supplier.example" if contact_mode != 1 else ""
-        tel = f"+86 138 {1000 + i:04d} {2000 + i:04d}" if contact_mode != 0 else ""
-        if country == "Vietnam" and tel:
-            tel = f"+84 90 {100 + i:03d} {200 + i:03d}"
-        elif country == "India" and tel:
-            tel = f"+91 98 {1000 + i:04d} {i:04d}"
-        elif country == "Japan" and tel:
-            tel = f"+81 90 {1000 + i:04d} {i:04d}"
-        elif country == "Thailand" and tel:
-            tel = f"+66 81 {100 + i:03d} {200 + i:03d}"
+        tel = ""
+        if contact_mode != 0:
+            prefix = phone_prefix.get(country, "+86 138")
+            tel = f"{prefix} {1000 + i:04d} {2000 + i:04d}"
 
-        tag2 = free_tag_pool[(i - 1) % len(free_tag_pool)]
-        tag3 = free_tag_pool[(i + 7) % len(free_tag_pool)] if i % 2 == 0 else None
-        tag4 = free_tag_pool[(i + 13) % len(free_tag_pool)] if i % 5 == 0 else None
+        tag2 = free_tag_pool[(idx * 3) % len(free_tag_pool)]
+        tag3 = free_tag_pool[(idx * 5 + 7) % len(free_tag_pool)] if i % 2 == 0 else None
+        tag4 = free_tag_pool[(idx * 7 + 13) % len(free_tag_pool)] if i % 5 == 0 else None
 
-        fn = first_names[(i - 1) % len(first_names)]
+        fn = first_names[idx % len(first_names)]
         ln = last_names[(i * 3) % len(last_names)]
-        cw1 = company_words[(i - 1) % len(company_words)]
+        cw1 = company_words[idx % len(company_words)]
         cw2 = company_words[(i * 5) % len(company_words)]
         factory = f"{city} {cw1} {cw2} Co. #{i:02d}"
 
@@ -495,11 +513,11 @@ def _seed_sample_suppliers(conn: sqlite3.Connection) -> None:
                 "nature_of_product": nature,
                 "item_group_name": item_group_name,
                 "production_method": production_method,
-                "tag_1": grouping,
+                "tag_1": tag_1,
                 "tag_2": tag2,
                 "tag_3": tag3,
                 "tag_4": tag4,
-                "notes": f"Demo supplier {i}/50 — {nature}, {grouping}, {country}.",
+                "notes": f"Demo supplier {i}/{count} — {nature}, {grouping}, {country}.",
             }
         )
 
@@ -510,9 +528,23 @@ def _seed_sample_suppliers(conn: sqlite3.Connection) -> None:
         "production_method", "tag_1", "tag_2", "tag_3", "tag_4", "notes",
         "created_at", "updated_at", "created_by", "updated_by",
     ]
-    for i, s in enumerate(samples, start=1):
+    # Prefer unused SUP-NNNN codes so a one-shot refresh can coexist with any kept rows.
+    used_codes: set[str] = set()
+    for r in conn.execute(
+        "SELECT short_code FROM suppliers WHERE short_code IS NOT NULL"
+    ).fetchall():
+        code = (r["short_code"] or "").strip().upper()
+        if code:
+            used_codes.add(code)
+    next_n = 1
+    for s in samples:
         s = dict(s)
-        s["short_code"] = f"SUP-{i:04d}"
+        while f"SUP-{next_n:04d}" in used_codes:
+            next_n += 1
+        code = f"SUP-{next_n:04d}"
+        used_codes.add(code)
+        next_n += 1
+        s["short_code"] = code
         values = [s.get(c) for c in cols[:-4]] + [now, now, admin_id, admin_id]
         placeholders = ",".join("?" * len(cols))
         conn.execute(
@@ -527,6 +559,29 @@ def _seed_sample_suppliers(conn: sqlite3.Connection) -> None:
                     "INSERT OR IGNORE INTO known_tags (tag, created_at) VALUES (?, ?)",
                     (tag, now),
                 )
+
+
+def _migrate_demo_suppliers_v40(conn: sqlite3.Connection) -> None:
+    """One-shot: replace demo sample rows with ~40 diverse suppliers. Never re-runs."""
+    row = conn.execute(
+        "SELECT value FROM app_meta WHERE key = 'demo_suppliers_version'"
+    ).fetchone()
+    if row and row["value"] == "v40_diverse":
+        return
+    # Remove previous demo samples only (notes prefix). Keep any non-demo rows.
+    conn.execute(
+        "DELETE FROM suppliers WHERE notes LIKE 'Demo supplier %'"
+    )
+    remaining = conn.execute("SELECT COUNT(*) FROM suppliers").fetchone()[0]
+    need = max(0, 40 - int(remaining))
+    if need:
+        _seed_sample_suppliers(conn, count=need)
+    conn.execute(
+        """
+        INSERT INTO app_meta (key, value) VALUES ('demo_suppliers_version', 'v40_diverse')
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value
+        """
+    )
 
 
 def row_to_dict(row: Optional[sqlite3.Row]) -> Optional[dict[str, Any]]:
