@@ -165,7 +165,7 @@ def init_db() -> None:
         _migrate_schema(conn)
         _seed_if_empty(conn)
         _sync_lookups_from_seed(conn)
-        _migrate_fencing_grouping(conn)
+        _migrate_grouping_list(conn)
         _migrate_column_prefs_full(conn)
         # Drop orphan known_tags so Admin list matches live usage;
         # create/edit suggestions already ignore known_tags entirely.
@@ -187,12 +187,43 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
     )
 
 
-def _migrate_fencing_grouping(conn: sqlite3.Connection) -> None:
-    """Rename Grouping label Fencing → Animal Husbandry / Fencing (UPDATE only)."""
-    conn.execute(
-        "UPDATE suppliers SET tag_1 = ? WHERE tag_1 = ? COLLATE NOCASE",
-        ("Animal Husbandry / Fencing", "Fencing"),
-    )
+def _migrate_grouping_list(conn: sqlite3.Connection) -> None:
+    """Remap/clear supplier tag_1 to match Jean's current Grouping list (no DELETE)."""
+    allowed = get_grouping_options()
+    allowed_cf = {v.casefold(): v for v in allowed}
+    # Preferred remaps for known renames (case-insensitive).
+    remaps = {
+        "fencing": "Animal husbandry / Livestock accessories",
+        "animal husbandry / fencing": "Animal husbandry / Livestock accessories",
+    }
+    rows = conn.execute(
+        "SELECT id_supplier, tag_1 FROM suppliers "
+        "WHERE tag_1 IS NOT NULL AND TRIM(tag_1) != ''"
+    ).fetchall()
+    for row in rows:
+        raw = (row["tag_1"] or "").strip()
+        if not raw:
+            continue
+        key = raw.casefold()
+        if key in allowed_cf:
+            canonical = allowed_cf[key]
+            if canonical != raw:
+                conn.execute(
+                    "UPDATE suppliers SET tag_1 = ? WHERE id_supplier = ?",
+                    (canonical, row["id_supplier"]),
+                )
+            continue
+        if key in remaps:
+            conn.execute(
+                "UPDATE suppliers SET tag_1 = ? WHERE id_supplier = ?",
+                (remaps[key], row["id_supplier"]),
+            )
+            continue
+        # Unknown old value: clear (OEM may stay empty; Finish product re-picked on edit).
+        conn.execute(
+            "UPDATE suppliers SET tag_1 = '' WHERE id_supplier = ?",
+            (row["id_supplier"],),
+        )
 
 
 def _migrate_column_prefs_full(conn: sqlite3.Connection) -> None:

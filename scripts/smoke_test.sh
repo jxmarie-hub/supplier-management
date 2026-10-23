@@ -124,7 +124,7 @@ curl -sS -c "$COOKIE" -b "$COOKIE" -X POST "$BASE/suppliers/new" \
   -F "website=" -F "contact_name=T" -F "email=tag-seed-smoke$$@example.com" \
   -F "tel_whatsapp_wechat=" -F "nature_of_product=Finish product" \
   -F "item_group_name=GARDENING MACHINES" -F "production_method=" \
-  -F "tag_1=Blade" -F "tag_2=lawn mower" -F "tag_3=" -F "tag_4=" \
+  -F "tag_1=Hand tools" -F "tag_2=lawn mower" -F "tag_3=" -F "tag_4=" \
   -F "notes=seed for similarity" -F "attachment_type=other" \
   -F "tag_resolve_1=" -F "tag_resolve_2=keep" -F "tag_resolve_3=" -F "tag_resolve_4=" \
   -o /dev/null -D /tmp/sm_tag_seed.txt -w "tag_seed=%{http_code}\n"
@@ -138,7 +138,7 @@ CODE=$(curl -sS -c "$COOKIE" -b "$COOKIE" -X POST "$BASE/suppliers/new" \
   -F "website=" -F "contact_name=T" -F "email=tag-unify-smoke@example.com" \
   -F "tel_whatsapp_wechat=" -F "nature_of_product=Finish product" \
   -F "item_group_name=GARDENING MACHINES" -F "production_method=" \
-  -F "tag_1=Blade" -F "tag_2=Lawnmower" -F "tag_3=" -F "tag_4=" \
+  -F "tag_1=Hand tools" -F "tag_2=Lawnmower" -F "tag_3=" -F "tag_4=" \
   -F "notes=x" -F "attachment_type=other" \
   -F "tag_resolve_1=" -F "tag_resolve_2=" -F "tag_resolve_3=" -F "tag_resolve_4=" \
   -o /tmp/sm_tag.html -w "%{http_code}")
@@ -334,10 +334,38 @@ assert not re.search(r">\d{4}-\d{2}-\d{2} \d{2}:\d{2}", html), "hour still shown
 print("home_all_columns_order_ok")
 PY
 
-echo "== Grouping list has Animal Husbandry / Fencing =="
+echo "== Grouping list has Jean 17 values in order =="
 CREATE_HTML=$(curl -fsS -c "$COOKIE" -b "$COOKIE" "$BASE/suppliers/new")
-echo "$CREATE_HTML" | grep -q "Animal Husbandry / Fencing"
-! echo "$CREATE_HTML" | grep -q 'option value="Fencing"'
-echo "grouping_rename_ok"
+printf "%s" "$CREATE_HTML" > /tmp/sm_create_grouping.html
+python3 - <<'PY'
+import re
+html = open("/tmp/sm_create_grouping.html").read()
+m = re.search(r'id="field-grouping"[^>]*>(.*?)</select>', html, re.S)
+assert m, "grouping select missing"
+vals = [v for v in re.findall(r'<option value="([^"]*)"', m.group(1)) if v]
+expected = [
+    "Battery",
+    "Carbide",
+    "Chain / Bearing / Pillow block",
+    "Corporate gifts",
+    "Electric component",
+    "Animal husbandry / Livestock accessories",
+    "Hand tools",
+    "Home furniture - Appliance",
+    "LED",
+    "Machines and Attachments",
+    "Power tools",
+    "PTO / Gear Box",
+    "Agri - Spare parts / Accessories",
+    "Auto - Spare parts / Accessories",
+    "Gardening - Spare parts / Accessories",
+    "Tyre - Tube - Wheel",
+    "Workshop equipment",
+]
+assert vals == expected, vals
+assert "Blade" not in vals
+assert "Fencing" not in vals
+print("grouping_list_17_ok")
+PY
 
 echo "ALL SMOKE CHECKS PASSED"
