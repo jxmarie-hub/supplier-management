@@ -75,6 +75,21 @@ echo "$VIEW" | grep -q "$SMOKE_NAME"
 echo "$VIEW" | grep -q "Edit"
 
 echo "== Tag similarity (Lawnmower vs lawn mower) =="
+# Ensure a live free-tag "lawn mower" exists without relying on demo reseed.
+CSRF=$(curl -fsS -c "$COOKIE" -b "$COOKIE" "$BASE/suppliers/new" | sed -n 's/.*name="csrf_token" value="\([^"]*\)".*/\1/p' | head -1)
+curl -sS -c "$COOKIE" -b "$COOKIE" -X POST "$BASE/suppliers/new" \
+  -F "csrf_token=$CSRF" \
+  -F "short_code=" -F "status=Prospect" -F "interest_level=In Case" -F "meet=" \
+  -F "country=Vietnam" -F "cn_province=N/A" -F "city=HCMC" \
+  -F "factory_trading_name=Tag Seed Smoke Co $$" \
+  -F "website=" -F "contact_name=T" -F "email=tag-seed-smoke$$@example.com" \
+  -F "tel_whatsapp_wechat=" -F "nature_of_product=Finish product" \
+  -F "item_group_name=GARDENING MACHINES" -F "production_method=" \
+  -F "tag_1=Blade" -F "tag_2=lawn mower" -F "tag_3=" -F "tag_4=" \
+  -F "notes=seed for similarity" -F "attachment_type=other" \
+  -F "tag_resolve_1=" -F "tag_resolve_2=keep" -F "tag_resolve_3=" -F "tag_resolve_4=" \
+  -o /dev/null -D /tmp/sm_tag_seed.txt -w "tag_seed=%{http_code}\n"
+grep -qi 'location:' /tmp/sm_tag_seed.txt
 CSRF=$(curl -fsS -c "$COOKIE" -b "$COOKIE" "$BASE/suppliers/new" | sed -n 's/.*name="csrf_token" value="\([^"]*\)".*/\1/p' | head -1)
 CODE=$(curl -sS -c "$COOKIE" -b "$COOKIE" -X POST "$BASE/suppliers/new" \
   -F "csrf_token=$CSRF" \

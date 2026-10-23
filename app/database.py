@@ -234,16 +234,15 @@ def _sync_lookups_from_seed(conn: sqlite3.Connection) -> None:
 
 
 def _seed_if_empty(conn: sqlite3.Connection) -> None:
+    """First-install seed only. Never wipe suppliers on an existing database.
+
+    Sample suppliers (~50) are created only when there are no users yet
+    (fresh empty DB). Later startups leave supplier rows untouched — even if
+    the count is below 50 or some rows have incomplete lookup values.
+    Lookup dropdown lists are refreshed separately by _sync_lookups_from_seed.
+    """
     user_count = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
     lookup_count = conn.execute("SELECT COUNT(*) FROM lookup_values").fetchone()[0]
-    supplier_count = conn.execute("SELECT COUNT(*) FROM suppliers").fetchone()[0]
-    demo_target = 50
-    data = _load_seed_data()
-    countries = {_clean_lookup_value(v) for v in data.get("countries", []) if str(v).strip()}
-    groupings = {_clean_lookup_value(v) for v in data.get("groupings", []) if str(v).strip()}
-    meets = {_clean_lookup_value(v) for v in data.get("meets", []) if str(v).strip()}
-    item_groups = {_clean_lookup_value(v) for v in data.get("item_groups", []) if str(v).strip()}
-    methods = {_clean_lookup_value(v) for v in data.get("production_methods", []) if str(v).strip()}
 
     if lookup_count == 0:
         _seed_lookups(conn)
@@ -258,44 +257,6 @@ def _seed_if_empty(conn: sqlite3.Connection) -> None:
             "INSERT INTO users (username, password_hash, role, is_active, created_at) VALUES (?, ?, ?, 1, ?)",
             ("Utilisateur1", hash_password("EssayeCa"), "standard", now),
         )
-        _seed_sample_suppliers(conn)
-        return
-
-    def _bad_count(column: str, allowed: set[str]) -> int:
-        if not allowed:
-            return 0
-        placeholders = ",".join("?" * len(allowed))
-        return conn.execute(
-            f"""
-            SELECT COUNT(*) FROM suppliers
-            WHERE {column} IS NOT NULL AND TRIM({column}) != ''
-              AND {column} NOT IN ({placeholders})
-            """,
-            tuple(allowed),
-        ).fetchone()[0]
-
-    bad = (
-        _bad_count("country", countries)
-        + _bad_count("tag_1", groupings)
-        + _bad_count("meet", meets)
-        + _bad_count("item_group_name", item_groups)
-        + _bad_count("production_method", methods)
-    )
-    # Legacy N/A production method is no longer in Jean's list
-    bad += conn.execute(
-        "SELECT COUNT(*) FROM suppliers WHERE production_method = 'N/A'"
-    ).fetchone()[0]
-    interest_filled = conn.execute(
-        "SELECT COUNT(*) FROM suppliers WHERE interest_level IS NOT NULL AND TRIM(interest_level) != ''"
-    ).fetchone()[0]
-    missing_interest = supplier_count > 0 and interest_filled == 0
-    missing_grouping = conn.execute(
-        "SELECT COUNT(*) FROM suppliers WHERE tag_1 IS NULL OR TRIM(tag_1) = ''"
-    ).fetchone()[0]
-    if supplier_count < demo_target or bad or missing_interest or missing_grouping:
-        conn.execute("DELETE FROM attachments")
-        conn.execute("DELETE FROM suppliers")
-        conn.execute("DELETE FROM known_tags")
         _seed_sample_suppliers(conn)
 
 
